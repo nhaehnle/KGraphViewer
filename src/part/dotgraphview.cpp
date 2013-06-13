@@ -44,8 +44,7 @@
 #include "kgraphviewer_partsettings.h"
 #include "simpleprintingcommand.h"
 #include "graphexporter.h"
-#include "loadagraphthread.h"
-#include "layoutagraphthread.h"
+#include "loadandlayoutjob.h"
 
 #include <stdlib.h>
 #include <math.h>
@@ -79,7 +78,9 @@
 #include <ktoggleaction.h>
 #include <kstandarddirs.h>
 #include <kactionmenu.h>
-    
+
+#include <ThreadWeaver/Weaver>
+  
 // DotGraphView defaults
 
 #define DEFAULT_ZOOMPOS      KGraphViewerInterface::Auto
@@ -112,8 +113,6 @@ public:
     m_readWrite(false),
     m_leavedTimer(std::numeric_limits<int>::max()),
     m_highlighting(false),
-    m_loadThread(),
-    m_layoutThread(),
     m_backgroundColor(QColor("white")),
     q_ptr( parent )
   {
@@ -199,12 +198,6 @@ public:
 
   /// true if elements should be highlighted on hover; false otherwise
   bool m_highlighting;
-
-  /// A thread to load graphviz agraph files
-  LoadAGraphThread m_loadThread;
-
-  /// A thread to layout graphviz agraph files
-  LayoutAGraphThread m_layoutThread;
 
   /// The graph background color
   QColor m_backgroundColor;
@@ -678,9 +671,6 @@ DotGraphView::DotGraphView(KActionCollection* actions, QWidget* parent) :
   setInteractive(true);
   setDragMode(NoDrag);
   setRenderHint(QPainter::Antialiasing);
-
-  connect(&d->m_loadThread, SIGNAL(finished()), this, SLOT(slotAGraphReadFinished()));
-  connect(&d->m_layoutThread, SIGNAL(finished()), this, SLOT(slotAGraphLayoutFinished()));
 }
 
 DotGraphView::~DotGraphView()
@@ -884,20 +874,49 @@ bool DotGraphView::loadDot(const QString& dotFileName)
   return true;
 }
 
+/**
+ * \TODO Figure out whether the return message is supposed to be meaningful
+ */
 bool DotGraphView::loadLibrary(const QString& dotFileName)
 {
-  kDebug() << "'" << dotFileName << "'";
   Q_D(DotGraphView);
-  if (d->m_canvas)
+  kDebug() << "'" << dotFileName << "'";
+  if (d->m_canvas) {
     d->m_canvas->clear();
-  QGraphicsSimpleTextItem* loadingLabel = d->m_canvas->addSimpleText(i18n("graph %1 is getting loaded...", dotFileName));
-  loadingLabel->setZValue(100);
-  centerOn(loadingLabel);
+    QGraphicsSimpleTextItem* loadingLabel = d->m_canvas->addSimpleText(i18n("graph %1 is getting loaded...", dotFileName));
+    loadingLabel->setZValue(100);
+    centerOn(loadingLabel);
+  }
 
-  d->m_loadThread.loadFile(dotFileName);
-  
+  QString layoutCommand = (d->m_graph!=0?d->m_graph->layoutCommand():"");
+  if (layoutCommand.isEmpty())
+  {
+    if (d->m_graph && !dotFileName.isEmpty())
+      layoutCommand = d->m_graph->chooseLayoutProgramForFile(dotFileName);
+    else
+      layoutCommand = "dot";
+  }
+
+  //TODO: Figure out what happens when DotGraphView is destroyed while the job is still running!
+  LoadAndLayoutJob* job = new LoadAndLayoutJob(dotFileName, layoutCommand, this);
+  connect(job, SIGNAL(done(ThreadWeaver::Job*)), SLOT());
+  ThreadWeaver::Weaver::instance()->enqueue(job);
+
   return true;
 }
+
+void DotGraphView::slotLoadAndLayoutFinished(ThreadWeaver::Job* job)
+{
+  Q_D(DotGraphView);
+  LoadAndLayoutJob* ljob = static_cast<LoadAndLayoutJob*>(job);
+  ljob->deleteLater();
+
+  bool result = loadLibrary(ljob->graph(), ljob->layoutCommand());
+  if (result)
+    d->m_graph->dotFileName(ljob->dotFileName());
+}
+
+
 
 bool DotGraphView::loadLibrary(graph_t* graph, const QString& layoutCommand)
 {
@@ -2221,31 +2240,6 @@ void DotGraphView::enterEvent ( QEvent * /*event*/ )
     killTimer(d->m_leavedTimer);
     d->m_leavedTimer = std::numeric_limits<int>::max();
   }
-}
-
-void DotGraphView::slotAGraphReadFinished()
-{
-  Q_D(DotGraphView);
-  QString layoutCommand = (d->m_graph!=0?d->m_graph->layoutCommand():"");
-  if (layoutCommand.isEmpty())
-  {
-    if (!d->m_loadThread.dotFileName().isEmpty())
-      layoutCommand = d->m_graph->chooseLayoutProgramForFile(d->m_loadThread.dotFileName());
-    else
-      layoutCommand = "dot";
-  }
-  d->m_layoutThread.layoutGraph(d->m_loadThread.g(), layoutCommand);
-}
-
-void DotGraphView::slotAGraphLayoutFinished()
-{
-  Q_D(DotGraphView);
-  bool result = loadLibrary(d->m_layoutThread.g(), d->m_layoutThread.layoutCommand());
-  if (result)
-    d->m_graph->dotFileName(d->m_loadThread.dotFileName());
-
-  gvFreeLayout(d->m_layoutThread.gvc(), d->m_layoutThread.g());
-  agclose(d->m_layoutThread.g());
 }
 
 void DotGraphView::slotSelectNode(const QString& nodeName)

@@ -44,6 +44,10 @@
 #include "kgraphviewer_export.h"
 #include "kgraphviewer_interface.h"
 
+namespace ThreadWeaver {
+class Job;
+}
+
 class KSelectAction;
 
 class QKeyEvent;
@@ -237,8 +241,7 @@ protected:
   void enterEvent ( QEvent * event );
   
 private Q_SLOTS:
-  void slotAGraphReadFinished();
-  void slotAGraphLayoutFinished();
+  void slotLoadAndLayoutFinished(ThreadWeaver::Job* job);
   
 protected:
   DotGraphViewPrivate * const d_ptr;
