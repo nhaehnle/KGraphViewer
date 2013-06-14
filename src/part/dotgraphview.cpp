@@ -899,7 +899,7 @@ bool DotGraphView::loadLibrary(const QString& dotFileName)
 
   //TODO: Figure out what happens when DotGraphView is destroyed while the job is still running!
   LoadAndLayoutJob* job = new LoadAndLayoutJob(dotFileName, layoutCommand, this);
-  connect(job, SIGNAL(done(ThreadWeaver::Job*)), SLOT());
+  connect(job, SIGNAL(done(ThreadWeaver::Job*)), SLOT(slotLoadAndLayoutFinished(ThreadWeaver::Job*)));
   ThreadWeaver::Weaver::instance()->enqueue(job);
 
   return true;
@@ -910,6 +910,16 @@ void DotGraphView::slotLoadAndLayoutFinished(ThreadWeaver::Job* job)
   Q_D(DotGraphView);
   LoadAndLayoutJob* ljob = static_cast<LoadAndLayoutJob*>(job);
   ljob->deleteLater();
+
+  if (!ljob->graph()) {
+    if (d->m_canvas) {
+      d->m_canvas->clear();
+      QGraphicsSimpleTextItem* loadingLabel = d->m_canvas->addSimpleText(ljob->error());
+      loadingLabel->setZValue(100);
+      centerOn(loadingLabel);
+    }
+    return;
+  }
 
   bool result = loadLibrary(ljob->graph(), ljob->layoutCommand());
   if (result)
