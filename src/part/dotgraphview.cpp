@@ -1535,6 +1535,7 @@ void DotGraphView::slotElementHoverLeave(CanvasEdge* element)
   emit (hoverLeave(element->edge()->id()));
 }
 
+//TODO: Do the layouting on the in-memory graph rather than reloading from file
 void DotGraphView::setLayoutCommand(const QString& command)
 {
   Q_D(DotGraphView);
