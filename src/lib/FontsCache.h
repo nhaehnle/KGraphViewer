@@ -32,6 +32,7 @@
  * @short A fonts map
  * @author Gaël de Chalendar <kleag@free.fr>
  */
+//TODO: Remove dependence on Singleton
 class FontsCache : 
   public Singleton<FontsCache>,
   public QMap<QString, QFont*>

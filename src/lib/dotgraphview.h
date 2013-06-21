@@ -74,7 +74,7 @@ class DotGraphViewPrivate;
  * and another zoomed out CanvasView in a border acting as
  * a panner to select to visible part (only if needed)
  */
-class KGRAPHVIEWER_EXPORT DotGraphView: public QGraphicsView
+class KGRAPHVIEWER_EXPORT DotGraphView : public QGraphicsView
 {
  Q_OBJECT
 

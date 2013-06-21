@@ -41,7 +41,7 @@
 #include "canvasnode.h"
 #include "graphedge.h"
 #include "FontsCache.h"
-#include "kgraphviewer_partsettings.h"
+#include "kgraphviewer_partsettings.h" //TODO: remove this dependence
 #include "simpleprintingcommand.h"
 #include "graphexporter.h"
 #include "loadandlayoutjob.h"
