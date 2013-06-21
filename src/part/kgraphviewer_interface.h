@@ -76,6 +76,8 @@ public:
     InternalLibrary
   };
 
+  virtual ~KGraphViewerInterface() {}
+
   virtual void setLayoutMethod(LayoutMethod method) = 0;
   virtual void zoomIn() = 0;
   virtual void zoomOut() = 0;
@@ -134,3 +136,5 @@ protected:
 Q_DECLARE_INTERFACE(KGraphViewer::KGraphViewerInterface, "org.kde.KGraphViewerInterface")
 
 #endif // KGRAPHVIEWER_INTERFACE_H
+
+// kate: space-indent on;indent-width 2;replace-tabs on

@@ -978,7 +978,7 @@ void DotGraph::addNewEdge(QString src, QString tgt, QMap<QString,QString> attrib
   edges().insert(newEdge->id(), newEdge);
 }
 
-void DotGraph::removeAttribute(const QString& nodeName, const QString& attribName)
+void DotGraph::removeNodeAttribute(const QString& nodeName, const QString& attribName)
 {
   kDebug();
   GraphElement* element = elementNamed(nodeName);
