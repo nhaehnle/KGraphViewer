@@ -61,3 +61,5 @@ install( PROGRAMS kgrapheditor.desktop DESTINATION ${XDG_APPS_INSTALL_DIR} )
 
 
 #add_subdirectory(plasmaapplet)
+
+add_subdirectory(examples)

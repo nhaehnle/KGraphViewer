@@ -58,7 +58,7 @@
 using namespace KGraphViewer;
 
 KGraphEditor::KGraphEditor() :
-    KXmlGuiWindow(), 
+    KXmlGuiWindow(),
     m_rfa(0),
     m_currentPart(0)
 {
@@ -69,7 +69,7 @@ KGraphEditor::KGraphEditor() :
   m_widget->setHoverCloseButton(true);
   connect(m_widget, SIGNAL(closeRequest(QWidget*)), this, SLOT(close(QWidget*)));
   connect(m_widget, SIGNAL(currentChanged(QWidget*)), this, SLOT(newTabSelectedSlot(QWidget*)));
-  
+
   setCentralWidget(m_widget);
 
   QDockWidget* topLeftDockWidget = new QDockWidget(this);
@@ -107,7 +107,7 @@ KGraphEditor::KGraphEditor() :
   {
     kDebug() << "Service Registered successfuly";
     QDBusConnection::sessionBus().registerObject("/", this, QDBusConnection::ExportAllSlots);
-    
+
   }
   else
   {
@@ -127,7 +127,7 @@ KGraphEditor::KGraphEditor() :
 
   // Creates the GUI with a null part to make appear the main app menus and tools
   createGUI(0);
-  setupGUI();  
+  setupGUI();
   // apply the saved mainwindow settings, if any, and ask the mainwindow
   // to automatically save settings if changed: window size, toolbar
   // position, icon size, etc.
@@ -143,8 +143,8 @@ KGraphEditor::~KGraphEditor()
 void KGraphEditor::reloadPreviousFiles()
 {
   QStringList previouslyOpenedFiles = KGraphEditorSettings::previouslyOpenedFiles();
-  if ( (previouslyOpenedFiles.empty() == false) 
-       && (KMessageBox::questionYesNo(this, 
+  if ( (previouslyOpenedFiles.empty() == false)
+       && (KMessageBox::questionYesNo(this,
               i18n("Do you want to reload files from previous session?"),
               i18n("Session Restore"),
               KStandardGuiItem::yes(),
@@ -158,7 +158,7 @@ void KGraphEditor::reloadPreviousFiles()
       openUrl(*it);
     }
   }
-  
+
 }
 
 DotGraphView*  KGraphEditor::slotNewGraph()
@@ -182,7 +182,7 @@ void KGraphEditor::openUrl(const KUrl& url)
 {
   kDebug() << url;
   DotGraphView* part = slotNewGraph();
-  
+
 //   (KGraphEditorSettings::parsingMode() == "external")
 //     ?kgv->setLayoutMethod(KGraphViewerInterface::ExternalProgram)
 //     :kgv->setLayoutMethod(KGraphViewerInterface::InternalLibrary);
@@ -204,7 +204,7 @@ void KGraphEditor::fileOpen()
   // the Open shortcut is pressed (usually CTRL+O) or the Open toolbar
   // button is clicked
   QStringList file_names = KFileDialog::getOpenFileNames(KUrl(QString()), QString("*.dot"), 0, QString::null);
-  
+
   if (!file_names.empty())
   {
     foreach (const QString &fileName, file_names)
@@ -308,13 +308,13 @@ void KGraphEditor::optionsConfigureToolbars()
 
 void KGraphEditor::optionsConfigure()
 {
-  //An instance of your dialog could be already created and could be cached, 
-  //in which case you want to display the cached dialog instead of creating 
-  //another one 
+  //An instance of your dialog could be already created and could be cached,
+  //in which case you want to display the cached dialog instead of creating
+  //another one
   if ( KgeConfigurationDialog::showDialog( "settings" ) )
-    return; 
- 
-  //KConfigDialog didn't find an instance of this dialog, so lets create it : 
+    return;
+
+  //KConfigDialog didn't find an instance of this dialog, so lets create it :
   KPageDialog::FaceType ft = KPageDialog::Auto;
   KgeConfigurationDialog* dialog = new KgeConfigurationDialog( this, "settings",
                                              KGraphEditorSettings::self(),ft );
@@ -332,8 +332,8 @@ void KGraphEditor::optionsConfigure()
   connect((QObject*)parsingWidget->external, SIGNAL(toggled(bool)), this, SLOT(slotParsingModeExternalToggled(bool)) );
   connect((QObject*)parsingWidget->internal, SIGNAL(toggled(bool)), this, SLOT(slotParsingModeInternalToggled(bool)) );
 
-                                             
-/*  KGraphViewerPreferencesReloadWidget*  reloadWidget =  
+
+/*  KGraphViewerPreferencesReloadWidget*  reloadWidget =
       new KGraphViewerPreferencesReloadWidget( 0, "KGraphViewer Settings" );
   if (KGraphEditorSettings::reloadOnChangeMode() == "yes")
   {
@@ -347,12 +347,12 @@ void KGraphEditor::optionsConfigure()
   {
     reloadWidget->reloadOnChangeMode->setButton(2);
   }
-  
+
   connect((QObject*)reloadWidget->reloadOnChangeMode, SIGNAL(clicked(int)), this, SLOT(reloadOnChangeMode_pressed(int)) );
-  
-  dialog->addPage( reloadWidget, i18n("Reloading"), "kgraphreloadoptions", i18n("Reloading"), true); 
- 
-  KGraphViewerPreferencesOpenInExistingWindowWidget*  openingWidget =  
+
+  dialog->addPage( reloadWidget, i18n("Reloading"), "kgraphreloadoptions", i18n("Reloading"), true);
+
+  KGraphViewerPreferencesOpenInExistingWindowWidget*  openingWidget =
     new KGraphViewerPreferencesOpenInExistingWindowWidget( 0, "KGraphViewer Settings" );
   if (KGraphEditorSettings::openInExistingWindowMode() == "yes")
   {
@@ -366,12 +366,12 @@ void KGraphEditor::optionsConfigure()
   {
     openingWidget->openInExistingWindowMode->setButton(2);
   }
-  
+
   connect((QObject*)openingWidget->openInExistingWindowMode, SIGNAL(clicked(int)), this, SLOT(openInExistingWindowMode_pressed(int)) );
-  
-  dialog->addPage( openingWidget, i18n("Opening"), "kgraphopeningoptions", i18n("Opening"), true); 
-  
-  KGraphViewerPreferencesReopenPreviouslyOpenedFilesWidget*  reopeningWidget =  
+
+  dialog->addPage( openingWidget, i18n("Opening"), "kgraphopeningoptions", i18n("Opening"), true);
+
+  KGraphViewerPreferencesReopenPreviouslyOpenedFilesWidget*  reopeningWidget =
     new KGraphViewerPreferencesReopenPreviouslyOpenedFilesWidget( 0, "KGraphViewer Settings" );
   if (KGraphEditorSettings::reopenPreviouslyOpenedFilesMode() == "yes")
   {
@@ -385,10 +385,10 @@ void KGraphEditor::optionsConfigure()
   {
     reopeningWidget->reopenPreviouslyOpenedFilesMode->setButton(2);
   }
-  
+
   connect((QObject*)reopeningWidget->reopenPreviouslyOpenedFilesMode, SIGNAL(clicked(int)), this, SLOT(reopenPreviouslyOpenedFilesMode_pressed(int)) );
 
-  dialog->addPage( reopeningWidget, i18n("Session Management"), "kgraphreopeningoptions", i18n("Session Management"), true); 
+  dialog->addPage( reopeningWidget, i18n("Session Management"), "kgraphreopeningoptions", i18n("Session Management"), true);
   */
 //   connect(dialog, SIGNAL(settingsChanged()), this, SLOT(settingsChanged()));
 
@@ -422,7 +422,7 @@ void KGraphEditor::applyNewToolbarConfig()
 //   emit(settingsChanged());
 //   KGraphEditorSettings::writeConfig();
 // }
-// 
+//
 // void KGraphViewer::openInExistingWindowMode_pressed(int value)
 // {
 //   std::cerr << "openInExistingWindowMode_pressed " << value << std::endl;
@@ -441,12 +441,12 @@ void KGraphEditor::applyNewToolbarConfig()
 //   kError() << "Invalid OpenInExistingWindow value: " << value << endl;
 //     return;
 //   }
-// 
+//
 //   std::cerr << "emiting" << std::endl;
 //   emit(settingsChanged());
 //   KGraphEditorSettings::writeConfig();
 // }
-// 
+//
 // void KGraphViewer::reopenPreviouslyOpenedFilesMode_pressed(int value)
 // {
 //   std::cerr << "reopenPreviouslyOpenedFilesMode_pressed " << value << std::endl;
@@ -465,7 +465,7 @@ void KGraphEditor::applyNewToolbarConfig()
 //   kError() << "Invalid ReopenPreviouslyOpenedFilesMode value: " << value << endl;
 //     return;
 //   }
-// 
+//
 //   std::cerr << "emiting" << std::endl;
 //   emit(settingsChanged());
 //   KGraphEditorSettings::writeConfig();
@@ -568,7 +568,7 @@ void KGraphEditor::slotSetActiveGraph( DotGraphView* part)
   connect(this,SIGNAL(saddNewEdge(QString,QString,QMap<QString,QString>)),m_currentPart,SLOT(slotAddNewEdge(QString,QString,QMap<QString,QString>)));
   connect(this,SIGNAL(renameNode(QString,QString)),m_currentPart,SLOT(slotRenameNode(QString,QString)));
   connect(this,SIGNAL(setAttribute(QString,QString,QString)),m_currentPart,SLOT(slotSetAttribute(QString,QString,QString)));
-  
+
   QList<QString> nodesIds;//TODO = m_currentPart->nodesIds();
   QList<QTreeWidgetItem *> items;
   foreach (const QString& nodeId, nodesIds)
@@ -614,7 +614,7 @@ void KGraphEditor::slotSetActiveGraph( DotGraphView* part)
 
   connect( m_currentPart, SIGNAL( hoverEnter(const QString&) ),
            this, SLOT( slotHoverEnter(const QString&) ) );
-            
+
   connect( m_currentPart, SIGNAL( hoverLeave (const QString&) ),
           this, SLOT( slotHoverLeave(const QString&) ) );
 }

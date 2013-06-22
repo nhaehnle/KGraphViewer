@@ -2,6 +2,9 @@
 include_directories( ../part ../ ${Boost_INCLUDE_DIRS} ${graphviz_INCLUDE_DIRECTORIES} )
 
 set( kgraphviewerlib_LIB_SRCS
+   abstractgraphmodel.cpp
+   graphmodel.cpp
+   graphscene.cpp
    loadandlayoutjob.cpp
    graphelement.cpp
    graphsubgraph.cpp
