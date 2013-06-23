@@ -22,9 +22,6 @@
 
 #include "abstractgraphmodel.h"
 
-#include <QObject>
-#include <QRect>
-
 namespace KGraphViewer {
 
 /**
@@ -62,11 +59,11 @@ public:
 
 private:
     class Data;
-    QScopedPointer<Data> d;
+    const QScopedPointer<Data> d;
 };
 
 } // namespace KGraphViewer
 
 #endif // KGRAPHVIEWER_GRAPHMODEL_H
 
-// kate: space-indent on;indent-width 4;replace-tabs on
+// kate: space-indent on;indent-width 4;replace-tabs on;remove-trailing-space true

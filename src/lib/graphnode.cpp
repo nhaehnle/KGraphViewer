@@ -41,7 +41,7 @@
 
 namespace KGraphViewer
 {
-  
+
 //
 // GraphNode
 //

@@ -23,50 +23,8 @@
 
 namespace KGraphViewer {
 
-class AbstractGraphModel::Data {
-public:
-    enum TwoPhaseSignal {
-        NoSignal,
-        ModelResetSignal,
-        NodeInsertedSignal,
-        NodeRemovedSignal,
-        EdgeInsertedSignal,
-        EdgeRemovedSignal
-    };
-
-    TwoPhaseSignal twoPhaseSignal;
-    NodeIndex signalParent;
-    int signalIndex;
-
-    Data() : twoPhaseSignal(NoSignal), signalParent(), signalIndex(-1) {}
-    void beginSignal(TwoPhaseSignal sig);
-    void endSignal(TwoPhaseSignal sig);
-};
-
-void AbstractGraphModel::Data::beginSignal(AbstractGraphModel::Data::TwoPhaseSignal sig)
-{
-    Q_ASSERT(twoPhaseSignal == NoSignal);
-    if (twoPhaseSignal != NoSignal) {
-        kWarning() << "AbstractGraphModel::beginSignal: called without closing the previous signal";
-    }
-
-    twoPhaseSignal = sig;
-}
-
-void AbstractGraphModel::Data::endSignal(AbstractGraphModel::Data::TwoPhaseSignal sig)
-{
-    Q_ASSERT(twoPhaseSignal == sig);
-    if (twoPhaseSignal != sig) {
-        kWarning() << "AbstractGraphModel::endSignal: called for bad signal";
-    }
-
-    twoPhaseSignal = NoSignal;
-}
-
-
 AbstractGraphModel::AbstractGraphModel(QObject * parent) :
-    QObject(parent),
-    d(new Data)
+    QObject(parent)
 {
 }
 
@@ -127,82 +85,6 @@ QList<EdgeIndex> AbstractGraphModel::incidentEdges(const NodeIndex & node) const
     return edges;
 }
 
-void AbstractGraphModel::beginResetModel()
-{
-    d->beginSignal(Data::ModelResetSignal);
-    emit modelAboutToBeReset();
-}
-
-void AbstractGraphModel::endResetModel()
-{
-    d->endSignal(Data::ModelResetSignal);
-    emit modelReset();
-}
-
-void AbstractGraphModel::beginInsertNode(const NodeIndex & parent, int idx)
-{
-    d->beginSignal(Data::NodeInsertedSignal);
-    d->signalParent = parent;
-    d->signalIndex = idx;
-    emit nodeAboutToBeInserted(d->signalParent, d->signalIndex);
-}
-
-void AbstractGraphModel::endInsertNode()
-{
-    d->endSignal(Data::NodeInsertedSignal);
-    emit nodeInserted(d->signalParent, d->signalIndex);
-}
-
-void AbstractGraphModel::beginRemoveNode(const NodeIndex& parent, int idx)
-{
-    d->beginSignal(Data::NodeRemovedSignal);
-    d->signalParent = parent;
-    d->signalIndex = idx;
-    emit nodeAboutToBeRemoved(d->signalParent, d->signalIndex);
-}
-
-void AbstractGraphModel::endRemoveNode()
-{
-    d->endSignal(Data::NodeRemovedSignal);
-    emit nodeRemoved(d->signalParent, d->signalIndex);
-}
-
-void AbstractGraphModel::beginInsertEdge(int idx)
-{
-    d->beginSignal(Data::EdgeInsertedSignal);
-    d->signalIndex = idx;
-    emit edgeAboutToBeInserted(d->signalIndex);
-}
-
-void AbstractGraphModel::endInsertEdge()
-{
-    d->endSignal(Data::EdgeInsertedSignal);
-    emit edgeInserted(d->signalIndex);
-}
-
-void AbstractGraphModel::beginRemoveEdge(int idx)
-{
-    d->beginSignal(Data::EdgeRemovedSignal);
-    d->signalIndex = idx;
-    emit edgeAboutToBeRemoved(d->signalIndex);
-}
-
-void AbstractGraphModel::endRemoveEdge()
-{
-    d->endSignal(Data::EdgeRemovedSignal);
-    emit edgeRemoved(d->signalIndex);
-}
-
-NodeIndex AbstractGraphModel::makeNodeIndex(int index, void * p) const
-{
-    return NodeIndex(this, index, p);
-}
-
-EdgeIndex AbstractGraphModel::makeEdgeIndex(int index, void* p) const
-{
-    return EdgeIndex(this, index, p);
-}
-
 } // namespace KGraphViewer
 
-// kate: space-indent on;indent-width 4;replace-tabs on
+// kate: space-indent on;indent-width 4;replace-tabs on;remove-trailing-space true

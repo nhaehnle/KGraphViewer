@@ -23,6 +23,12 @@
 
 namespace KGraphViewer {
 
+/*
+
+GraphModel stores a tree of nodes and a flat list of all edges.
+
+*/
+
 namespace {
 
 struct Edge;
@@ -35,18 +41,20 @@ struct Edge;
  */
 struct Node {
     Node * parent;
+    Node * next;
+    Node ** pprev;
+    Node * firstChild;
     QList<Edge *> edges;
-    QList<Node *> children;
     QHash<int, QVariant> data;
 
-    Node() : parent(0) {}
+    Node() : firstChild(0) {}
     ~Node();
 };
 
 Node::~Node()
 {
     Q_ASSERT(edges.empty());
-    Q_ASSERT(children.empty());
+    Q_ASSERT(!firstChild);
 }
 
 /**
@@ -56,6 +64,8 @@ Node::~Node()
 struct Edge {
     Node * head;
     Node * tail;
+    Edge * next;
+    Edge ** pprev;
     QHash<int, QVariant> data;
 };
 
@@ -64,25 +74,20 @@ struct Edge {
 class GraphModel::Data {
 public:
     GraphModel & model;
-    QList<Node *> topLevelNodes;
-    QList<Edge *> edges;
+    Node * firstNode;
+    Edge * firstEdge;
 
-    Data(GraphModel & m) : model(m) {}
+    Data(GraphModel & m) : model(m), firstNode(0), firstEdge(0) {}
     ~Data();
 
     void clear();
-    void removeNode(const NodeIndex & parentidx, const NodeIndex & idx);
-    void removeEdge(const EdgeIndex & idx);
+    void removeNode(Node * node);
+    void removeEdge(Edge * edge);
 
-    Node * parentOfIndex(const NodeIndex & idx);
-    Node * nodeOfIndex(const NodeIndex & idx);
-    QList<Node *> & children(Node * node);
-    NodeIndex nodeToIndex(Node * node);
-
-    Edge * edgeOfIndex(const EdgeIndex & idx);
-    EdgeIndex edgeToIndex(Edge * edge);
-
-    NodeIndex makeNodeIndex(int index, Node * parent);
+    Node * nodeOfIndex(const NodeIndex & idx) {return idx.isValid() ? static_cast<Node *>(model.nodeIndexInternalPtr(idx)) : 0;}
+    Edge * edgeOfIndex(const EdgeIndex & idx) {return idx.isValid() ? static_cast<Edge *>(model.edgeIndexInternalPtr(idx)) : 0;}
+    NodeIndex nodeToIndex(Node * node) {return node ? model.makeNodeIndex(node) : NodeIndex();}
+    EdgeIndex edgeToIndex(Edge * edge) {return edge ? model.makeEdgeIndex(edge) : EdgeIndex();}
 };
 
 GraphModel::Data::~Data()
@@ -90,94 +95,43 @@ GraphModel::Data::~Data()
     clear();
 }
 
-NodeIndex GraphModel::Data::makeNodeIndex(int index, Node * parent)
-{
-    return model.makeNodeIndex(index, static_cast<void *>(parent));
-}
-
 void GraphModel::Data::clear()
 {
-    while (!topLevelNodes.empty()) {
-        removeNode(NodeIndex(), model.makeNodeIndex(0, 0));
+    while (firstNode) {
+        removeNode(firstNode);
     }
 
-    Q_ASSERT(edges.empty());
+    Q_ASSERT(!firstEdge);
 }
 
-void GraphModel::Data::removeNode(const NodeIndex & parentidx, const NodeIndex & idx)
+void GraphModel::Data::removeNode(Node * node)
 {
-    QList<Node *> & list = children(parentOfIndex(idx));
-    int index = idx.index();
-    Node * node = list[index];
+    Q_ASSERT(node != 0);
 
-    while (!node->children.empty())
-        removeNode(idx, model.makeNodeIndex(0, node));
+    while (node->firstChild)
+        removeNode(node->firstChild);
     while (!node->edges.empty())
-        removeEdge(edgeToIndex(node->edges[0]));
+        removeEdge(node->edges[0]);
 
-    model.beginRemoveNode(parentidx, index);
-    list.removeAt(index);
+    emit model.nodeAboutToBeRemoved(model.makeNodeIndex(node));
+    if (node->next)
+        node->next->pprev = node->pprev;
+    *node->pprev = node->next;
     delete node;
-    model.endRemoveNode();
 }
 
-void GraphModel::Data::removeEdge(const EdgeIndex & idx)
+void GraphModel::Data::removeEdge(Edge * edge)
 {
-    if (!idx.isValid())
-        return;
+    Q_ASSERT(edge != 0);
 
-    int index = idx.index();
-    Edge * edge = edges.at(index);
-    model.beginRemoveEdge(index);
+    emit model.edgeAboutToBeRemoved(model.makeEdgeIndex(edge));
     edge->head->edges.removeAll(edge);
     edge->tail->edges.removeAll(edge);
-    edges.removeAt(index);
+    if (edge->next)
+        edge->next->pprev = edge->pprev;
+    *edge->pprev = edge->next;
     delete edge;
-    model.endRemoveEdge();
 }
-
-Node * GraphModel::Data::parentOfIndex(const NodeIndex & idx)
-{
-    return static_cast<Node *>(model.nodeIndexInternalPtr(idx));
-}
-
-Node * GraphModel::Data::nodeOfIndex(const NodeIndex & idx)
-{
-    if (!idx.isValid())
-        return 0;
-    return children(parentOfIndex(idx)).at(idx.index());
-}
-
-QList<Node*>& GraphModel::Data::children(Node * node)
-{
-    if (node)
-        return node->children;
-    else
-        return topLevelNodes;
-}
-
-NodeIndex GraphModel::Data::nodeToIndex(Node * node)
-{
-    QList<Node *> & list = children(node->parent);
-    int index = list.indexOf(node);
-    Q_ASSERT(index >= 0 && index < list.size());
-    return model.makeNodeIndex(index, node->parent);
-}
-
-Edge * GraphModel::Data::edgeOfIndex(const EdgeIndex & idx)
-{
-    if (!idx.isValid())
-        return 0;
-    return edges.at(idx.index());
-}
-
-EdgeIndex GraphModel::Data::edgeToIndex(Edge * edge)
-{
-    int index = edges.indexOf(edge);
-    Q_ASSERT(index >= 0 && index < edges.size());
-    return model.makeEdgeIndex(index);
-}
-
 
 GraphModel::GraphModel(QObject * parent) :
     AbstractGraphModel(parent),
@@ -215,98 +169,72 @@ QVariant GraphModel::edgeData(const EdgeIndex & idx, int role) const
 NodeIndex GraphModel::firstNode(const NodeIndex & idx) const
 {
     Node * node = d->nodeOfIndex(idx);
-    if (node) {
-        if (node->children.empty())
-            return NodeIndex();
-    } else {
-        if (d->topLevelNodes.empty())
-            return NodeIndex();
-    }
-
-    return makeNodeIndex(0, node);
+    return d->nodeToIndex(node ? node->firstChild : d->firstNode);
 }
 
-NodeIndex GraphModel::nextNode(const NodeIndex& node) const
+NodeIndex GraphModel::nextNode(const NodeIndex & idx) const
 {
-    if (!node.isValid())
-        return NodeIndex();
-
-    Node * np = d->parentOfIndex(node);
-    QList<Node *> & children = d->children(np);
-    int nextindex = node.index() + 1;
-
-    if (nextindex < children.size())
-        return makeNodeIndex(nextindex, np);
-    else
-        return NodeIndex();
+    Node * node = d->nodeOfIndex(idx);
+    return d->nodeToIndex(node ? node->next : 0);
 }
 
-NodeIndex GraphModel::parent(const NodeIndex & node) const
+NodeIndex GraphModel::parent(const NodeIndex & idx) const
 {
-    Node * np = d->parentOfIndex(node);
-    return d->nodeToIndex(np);
+    Node * node = d->nodeOfIndex(idx);
+    return d->nodeToIndex(node ? node->parent : 0);
 }
 
 EdgeIndex GraphModel::firstEdge() const
 {
-    if (!d->edges.empty())
-        return makeEdgeIndex(0);
-    else
-        return EdgeIndex();
+    return d->edgeToIndex(d->firstEdge);
 }
 
-EdgeIndex GraphModel::nextEdge(const EdgeIndex & edge) const
+EdgeIndex GraphModel::nextEdge(const EdgeIndex & idx) const
 {
-    if (!edge.isValid())
-        return EdgeIndex();
-
-    int nextindex = edge.index();
-    if (nextindex < d->edges.size())
-        return makeEdgeIndex(nextindex);
-    else
-        return EdgeIndex();
+    Edge * edge = d->edgeOfIndex(idx);
+    return d->edgeToIndex(edge ? edge->next : 0);
 }
 
-QList<EdgeIndex> GraphModel::incidentEdges(const NodeIndex& node) const
+QList<EdgeIndex> GraphModel::incidentEdges(const NodeIndex & idx) const
 {
-    Node * n = d->nodeOfIndex(node);
-    if (!n)
+    Node * node = d->nodeOfIndex(idx);
+    if (!node)
         return QList<EdgeIndex>();
 
     QList<EdgeIndex> edges;
-    edges.reserve(n->edges.size());
-    Q_FOREACH(Edge * edge, n->edges) {
+    edges.reserve(node->edges.size());
+    Q_FOREACH(Edge * edge, node->edges) {
         edges.push_back(d->edgeToIndex(edge));
     }
 
     return edges;
 }
 
-QList<EdgeIndex> GraphModel::outgoingEdges(const NodeIndex& node) const
+QList<EdgeIndex> GraphModel::outgoingEdges(const NodeIndex & idx) const
 {
-    Node * n = d->nodeOfIndex(node);
-    if (!n)
+    Node * node = d->nodeOfIndex(idx);
+    if (!node)
         return QList<EdgeIndex>();
 
     QList<EdgeIndex> edges;
-    edges.reserve(n->edges.size());
-    Q_FOREACH(Edge * edge, n->edges) {
-        if (edge->tail == n)
+    edges.reserve(node->edges.size());
+    Q_FOREACH(Edge * edge, node->edges) {
+        if (edge->tail == node)
             edges.push_back(d->edgeToIndex(edge));
     }
     return edges;
 }
 
-QList<EdgeIndex> GraphModel::incomingEdges(const NodeIndex& node) const
+QList<EdgeIndex> GraphModel::incomingEdges(const NodeIndex & idx) const
 {
-    Node * n = d->nodeOfIndex(node);
-    if (!n)
+    Node * node = d->nodeOfIndex(idx);
+    if (!node)
         return QList<EdgeIndex>();
 
     QList<EdgeIndex> edges;
-    edges.reserve(n->edges.size());
-    Q_FOREACH(Edge * edge, n->edges) {
-        if (edge->head == n)
+    edges.reserve(node->edges.size());
+    Q_FOREACH(Edge * edge, node->edges) {
+        if (edge->head == node)
             edges.push_back(d->edgeToIndex(edge));
     }
     return edges;
@@ -315,35 +243,36 @@ QList<EdgeIndex> GraphModel::incomingEdges(const NodeIndex& node) const
 NodeIndex GraphModel::head(const EdgeIndex & idx) const
 {
     Edge * edge = d->edgeOfIndex(idx);
-    if (!edge)
-        return NodeIndex();
-    return d->nodeToIndex(edge->head);
+    return d->nodeToIndex(edge ? edge->head : 0);
 }
 
 NodeIndex GraphModel::tail(const EdgeIndex& idx) const
 {
     Edge * edge = d->edgeOfIndex(idx);
-    if (!edge)
-        return NodeIndex();
-    return d->nodeToIndex(edge->tail);
+    return d->nodeToIndex(edge ? edge->tail : 0);
 }
 
 NodeIndex GraphModel::addNode(const NodeIndex & parentidx)
 {
     Node * parent = d->nodeOfIndex(parentidx);
-    QList<Node *> & list = d->children(parent);
-    int index = list.size();
-    beginInsertNode(parentidx, index);
-    list.push_back(new Node);
-    endInsertNode();
-    return d->makeNodeIndex(index, parent);
+
+    Node * node = new Node;
+    node->parent = parent;
+    node->next = parent ? parent->firstChild : d->firstNode;
+    if (node->next)
+        node->pprev = &node->next;
+    node->pprev = parent ? &parent->firstChild : &d->firstNode;
+    *node->pprev = node;
+
+    NodeIndex idx = d->nodeToIndex(node);
+    emit nodeInserted(idx);
+    return idx;
 }
 
-void GraphModel::removeNode(const NodeIndex & node)
+void GraphModel::removeNode(const NodeIndex & idx)
 {
-    if (!node.isValid())
-        return;
-    d->removeNode(parent(node), node);
+    if (idx.isValid())
+        d->removeNode(d->nodeOfIndex(idx));
 }
 
 EdgeIndex GraphModel::addEdge(const NodeIndex & tailidx, const NodeIndex & headidx)
@@ -352,21 +281,27 @@ EdgeIndex GraphModel::addEdge(const NodeIndex & tailidx, const NodeIndex & headi
 
     Node * tail = d->nodeOfIndex(tailidx);
     Node * head = d->nodeOfIndex(headidx);
-    int index = d->edges.size();
-    beginInsertEdge(index);
+
     Edge * edge = new Edge;
     edge->head = head;
     edge->tail = tail;
     tail->edges.push_back(edge);
     head->edges.push_back(edge);
-    d->edges.push_back(edge);
-    endInsertEdge();
-    return makeEdgeIndex(index);
+    edge->next = d->firstEdge;
+    if (edge->next)
+        edge->next->pprev = &edge->next;
+    edge->pprev = &d->firstEdge;
+    d->firstEdge = edge;
+
+    EdgeIndex idx = d->edgeToIndex(edge);
+    emit edgeInserted(idx);
+    return idx;
 }
 
-void GraphModel::removeEdge(const EdgeIndex & edge)
+void GraphModel::removeEdge(const EdgeIndex & idx)
 {
-    d->removeEdge(edge);
+    if (idx.isValid())
+        d->removeEdge(d->edgeOfIndex(idx));
 }
 
 void GraphModel::setNodeData(const NodeIndex & idx, int role, const QVariant& data)
@@ -391,4 +326,4 @@ void GraphModel::setEdgeData(const EdgeIndex & idx, int role, const QVariant& da
 
 } // namespace KGraphViewer
 
-// kate: space-indent on;indent-width 4;replace-tabs on
+// kate: space-indent on;indent-width 4;replace-tabs on;remove-trailing-space true

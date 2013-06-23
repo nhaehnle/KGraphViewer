@@ -61,74 +61,6 @@ QGraphicsItem * DefaultItemDelegate::createNodeItem(const NodeIndex & node)
     return rect;
 }
 
-
-class Node;
-
-/**
- * List of shadow data for children of a node, implemented as pointers
- * because we don't want \ref Node to be copyable.
- *
- * This should really be replaced by a C++11 QList<std::unique_ptr<Node> >.
- */
-class NodeList {
-public:
-    NodeList() {}
-    ~NodeList();
-
-    void clear();
-    Node & createAt(int idx);
-    void removeAt(int idx);
-    int size() const {return list_.size();}
-
-    Node & operator[](int idx) {return *list_[idx];}
-
-private:
-    QList<Node *> list_;
-
-    Q_DISABLE_COPY(NodeList)
-};
-
-/**
- * Shadow data for each node, maintained by \ref GraphScene::Data.
- */
-class Node {
-public:
-    QGraphicsItem * item;
-    NodeList children;
-
-    Node() : item(0) {}
-    ~Node() {delete item; item = 0;}
-
-private:
-    Q_DISABLE_COPY(Node)
-};
-
-NodeList::~NodeList()
-{
-    clear();
-}
-
-void NodeList::clear()
-{
-    while (!list_.empty()) {
-        delete list_.last();
-        list_.pop_back();
-    }
-}
-
-Node & NodeList::createAt(int idx)
-{
-    Node * node = new Node;
-    list_.insert(idx, node);
-    return *node;
-}
-
-void NodeList::removeAt(int idx)
-{
-    delete list_[idx];
-    list_.removeAt(idx);
-}
-
 } // anonymous namespace
 
 class GraphScene::Data : public QObject {
@@ -136,7 +68,7 @@ public:
     AbstractGraphModel * model;
     AbstractItemDelegate * customDelegate;
     AbstractItemDelegate * defaultDelegate;
-    NodeList topLevelNodes;
+    QHash<NodeIndex, QGraphicsItem *> nodeItems;
 
     Data(GraphScene * scene) :
         QObject(scene),
@@ -152,12 +84,9 @@ public:
     void setModel(AbstractGraphModel * model);
     void setCustomDelegate(AbstractItemDelegate * delegate);
 
-    NodeList & childrenOfIndex(const NodeIndex & idx);
-    Node & nodeAtIndex(const NodeIndex & idx);
-
     void clearItems();
     void buildItems();
-    void buildChildren(const NodeIndex & parent, NodeList & list);
+    void buildChildren(const NodeIndex & parent);
 };
 
 AbstractItemDelegate * GraphScene::Data::delegate()
@@ -192,41 +121,28 @@ void GraphScene::Data::setModel(AbstractGraphModel * newModel)
         buildItems();
 }
 
-NodeList & GraphScene::Data::childrenOfIndex(const NodeIndex & idx)
-{
-    if (idx.isValid()) {
-        return nodeAtIndex(idx).children;
-    } else {
-        return topLevelNodes;
-    }
-}
-
-Node & GraphScene::Data::nodeAtIndex(const NodeIndex & node)
-{
-    Q_ASSERT(node.isValid());
-    return childrenOfIndex(node.parent())[node.index()];
-}
-
 void GraphScene::Data::clearItems()
 {
-    topLevelNodes.clear();
+    foreach (QGraphicsItem * item, nodeItems.values())
+        delete item;
+    nodeItems.clear();
 }
 
 void GraphScene::Data::buildItems()
 {
-    buildChildren(NodeIndex(), topLevelNodes);
+    buildChildren(NodeIndex());
 }
 
-void GraphScene::Data::buildChildren(const NodeIndex & parent, NodeList & list)
+void GraphScene::Data::buildChildren(const NodeIndex & parent)
 {
     AbstractItemDelegate * d = delegate();
     GraphScene * s = scene();
 
     for (NodeIndex nodeidx = model->firstNode(parent); nodeidx.isValid(); nodeidx = model->nextNode(nodeidx)) {
-        Node & node = list.createAt(list.size());
-        node.item = d->createNodeItem(nodeidx);
-        s->addItem(node.item);
-        buildChildren(nodeidx, node.children);
+        QGraphicsItem * item = d->createNodeItem(nodeidx);
+        s->addItem(item);
+        nodeItems.insert(nodeidx, item);
+        buildChildren(nodeidx);
     }
 }
 
@@ -275,4 +191,4 @@ AbstractItemDelegate * GraphScene::itemDelegate() const
 
 } // namespace KGraphViewer
 
-// kate: space-indent on;indent-width 4;replace-tabs on
+// kate: space-indent on;indent-width 4;replace-tabs on;remove-trailing-space true

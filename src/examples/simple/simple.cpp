@@ -76,4 +76,4 @@ int main(int argc, char **argv)
     return app.exec();
 }
 
-// kate: space-indent on;indent-width 4;replace-tabs on
+// kate: space-indent on;indent-width 4;replace-tabs on;remove-trailing-space true

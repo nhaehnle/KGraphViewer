@@ -137,4 +137,4 @@ Q_DECLARE_INTERFACE(KGraphViewer::KGraphViewerInterface, "org.kde.KGraphViewerIn
 
 #endif // KGRAPHVIEWER_INTERFACE_H
 
-// kate: space-indent on;indent-width 2;replace-tabs on
+// kate: space-indent on;indent-width 2;replace-tabs on;remove-trailing-space true

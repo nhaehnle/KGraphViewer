@@ -39,62 +39,70 @@ class AbstractGraphModel;
 
 class KGRAPHVIEWER_EXPORT NodeIndex {
 public:
-    NodeIndex() : m(0), i(-1), p(0) {}
+    NodeIndex() : m(0), p(0) {}
     ~NodeIndex() {m = 0; p = 0;}
 
-    bool isValid() const {return (i >= 0) && (m != 0);}
+    bool isValid() const {return m != 0;}
     const AbstractGraphModel * model() const {return m;}
     QVariant data(int role) const;
     NodeIndex parent() const;
     bool operator==(const NodeIndex & rhs) const {
-        return (rhs.i == i) && (rhs.p == p) && (rhs.m == m);
+        return (rhs.p == p) && (rhs.m == m);
     }
     bool operator!=(const NodeIndex & rhs) const {
         return !(*this == rhs);
     }
-
-    int index() const {return i;}
+    bool operator<(const NodeIndex & rhs) const {
+        return (p < rhs.p) || (p == rhs.p && m < rhs.m);
+    }
+    uint qHash() const {return ::qHash(m) ^ ::qHash(p);}
 
 private:
     friend class AbstractGraphModel;
-    NodeIndex(const AbstractGraphModel * m_, int i_, void *p_) : m(m_), i(i_), p(p_) {}
+    NodeIndex(const AbstractGraphModel * m_, void *p_) : m(m_), p(p_) {}
+    NodeIndex(const AbstractGraphModel * m_, int i_) : m(m_), p(reinterpret_cast<void *>(i_)) {}
 
     const AbstractGraphModel * m;
-    int i;
     void * p;
 };
 
+inline uint qHash(const KGraphViewer::NodeIndex & idx) {return idx.qHash();}
+
+
 class KGRAPHVIEWER_EXPORT EdgeIndex {
 public:
-    EdgeIndex() : m(0), i(-1), p(0) {}
+    EdgeIndex() : m(0), p(0) {}
     ~EdgeIndex() {m = 0; p = 0;}
-    bool isValid() const {return (i >= 0) && (m != 0);}
+    bool isValid() const {return (m != 0);}
     const AbstractGraphModel * model() const {return m;}
     QVariant data(int role) const;
     bool operator==(const EdgeIndex & rhs) const {
-        return (rhs.i == i) && (rhs.p == p) && (rhs.m == m);
+        return (rhs.p == p) && (rhs.m == m);
     }
     bool operator!=(const EdgeIndex & rhs) const {
         return !(*this == rhs);
     }
-
-    int index() const {return i;}
+    bool operator<(const EdgeIndex & rhs) const {
+        return (p < rhs.p) || (p == rhs.p && m < rhs.m);
+    }
+    uint qHash() const {return ::qHash(m) ^ ::qHash(p);}
 
 private:
     friend class AbstractGraphModel;
-    EdgeIndex(const AbstractGraphModel * m_, int i_, void * p_) : m(m_), i(i_), p(p_) {}
+    EdgeIndex(const AbstractGraphModel * m_, void * p_) : m(m_), p(p_) {}
 
     const AbstractGraphModel * m;
-    int i;
     void * p;
 };
+
+inline uint qHash(const KGraphViewer::EdgeIndex & idx) {return idx.qHash();}
+
 
 /**
  * Model of a (directed, multi-) graph, possibly with nested nodes.
  *
- * Node positions are given by their bounding boxes.
- * The head and tail position of edges is relative to the top-left corner of the bounding box
- * of the corresponding node.
+ * Implementations must ensure that NodeIndex and EdgeIndex instances are stable
+ * and remain valid unless the corresponding node or edge are removed.
  *
  * \warning EXPERIMENTAL! Absolutely no binary compatibility guarantees.
  */
@@ -157,41 +165,25 @@ public:
     //TODO: editing functions
 
 Q_SIGNALS:
-    void modelAboutToBeReset();
     void modelReset();
 
     void nodeDataChanged(const NodeIndex & node);
-    void nodeAboutToBeRemoved(const NodeIndex & parent, int idx);
-    void nodeRemoved(const NodeIndex & parent, int idx);
-    void nodeAboutToBeInserted(const NodeIndex & parent, int idx);
-    void nodeInserted(const NodeIndex & parent, int idxt);
+    void nodeAboutToBeRemoved(const NodeIndex & node);
+    void nodeInserted(const NodeIndex & node);
 
     void edgeDataChanged(const EdgeIndex & edge);
-    void edgeAboutToBeRemoved(int idx);
-    void edgeRemoved(int idx);
-    void edgeAboutToBeInserted(int idx);
-    void edgeInserted(int idx);
+    void edgeAboutToBeRemoved(const EdgeIndex & edge);
+    void edgeInserted(const EdgeIndex & edge);
 
 protected:
-    void beginResetModel();
-    void endResetModel();
-    void beginRemoveNode(const NodeIndex & parent, int idx);
-    void endRemoveNode();
-    void beginInsertNode(const NodeIndex & parent, int idx);
-    void endInsertNode();
-    void beginRemoveEdge(int idx);
-    void endRemoveEdge();
-    void beginInsertEdge(int idx);
-    void endInsertEdge();
-
-    void * nodeIndexInternalPtr(const NodeIndex & node) const {return node.p;}
-    void * edgeIndexInternalPtr(const EdgeIndex & edge) const {return edge.p;}
-    NodeIndex makeNodeIndex(int index, void * p = 0) const;
-    EdgeIndex makeEdgeIndex(int index, void * p = 0) const;
-
-private:
-    class Data;
-    QScopedPointer<Data> d;
+    void * nodeIndexInternalPtr(const NodeIndex & node) const {Q_ASSERT(node.m == this); return node.p;}
+    void * edgeIndexInternalPtr(const EdgeIndex & edge) const {Q_ASSERT(edge.m == this); return edge.p;}
+    int nodeIndexInternalInt(const NodeIndex & node) const {Q_ASSERT(node.m == this); return reinterpret_cast<size_t>(&node.p);}
+    int edgeIndexInternalInt(const EdgeIndex & edge) const {Q_ASSERT(edge.m == this); return reinterpret_cast<size_t>(&edge.p);}
+    NodeIndex makeNodeIndex(void * p) const {return NodeIndex(this, p);}
+    NodeIndex makeNodeIndex(int i) const  {return NodeIndex(this, reinterpret_cast<void *>(i));}
+    EdgeIndex makeEdgeIndex(void * p) const {return EdgeIndex(this, p);}
+    EdgeIndex makeEdgeIndex(int i) const {return EdgeIndex(this, reinterpret_cast<void *>(i));}
 };
 
 /* **************************************************************************
@@ -228,6 +220,4 @@ inline QVariant EdgeIndex::data(int role) const
 
 #endif // KGRAPHVIEWER_ABSTRACTGRAPHMODEL_H
 
-// kate: space-indent on;indent-width 4;replace-tabs on
-
-struct D;
+// kate: space-indent on;indent-width 4;replace-tabs on;remove-trailing-space true
