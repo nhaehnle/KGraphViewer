@@ -22,36 +22,26 @@
 #include <KDebug>
 #include <QRect>
 
+#ifdef WITH_CGRAPH
+#error Check that everything (in particular, subgraphs) work correctly in cgraph mode
+#endif
+
 namespace KGraphViewer {
 
 /*
 
 EdgeIndex internal pointer is the Agedge_t.
 
-For NodeIndex, we have to translate between the cgraph concepts of subgraphs and nodes,
-and the AbstractGraphModel concept of a tree of nodes. This is achieved by adding a
-Node struct to every Agnode_t and every Agraph_t as an internal attribute.
-
+NodeIndex internal pointer is the Agnode_t or Agraph_t.
 
 */
-
-namespace {
-
-static const char NODE[] = "KGraphViewer::Node";
-struct Node {
-    Agrec_t hdr;
-    void * prev; // either Agnode_t or Agraph_t
-    void * next;
-    void * firstChild;
-};
-
-} // anonymous namespace
 
 class DotGraphModel::Data {
 public:
     DotGraphModel & model;
     Agraph_t * graph_p;
     GVC_t * gvc;
+    unsigned int automaticNameCounter;
 
     Data(DotGraphModel & m);
     ~Data();
@@ -60,26 +50,28 @@ public:
     void clearLayout();
     Agraph_t * graph();
     void setGraph(Agraph_t * agraph);
-    void registerGraph(Agraph_t * graph);
-    void doRegisterAgraph(Agraph_t * graph);
-    void doRegisterAgnode(Agnode_t * node);
 
-    void * nodeAgobj(const NodeIndex & idx);
-    Node * nodeRecord(const NodeIndex & idx);
-    Node * nodeRecord(void * agobj);
-    NodeIndex nodeObjToIndex(void * agobj);
+    void * agobjFromIndex(const NodeIndex & idx);
+    Agnode_t * node_cast(void * obj);
+    Agraph_t * graph_cast(void * obj);
+    NodeIndex nodeToIndex(Agnode_t * node);
+    NodeIndex nodeToIndex(Agraph_t * node);
 
-    Agedge_t * edgeFromIndex(const EdgeIndex & idx) {return idx.isValid() ? model.edgeIndexInternalPtr(idx) : 0;}
+    Agedge_t * edgeFromIndex(const EdgeIndex & idx) {return idx.isValid() ? static_cast<Agedge_t *>(model.edgeIndexInternalPtr(idx)) : 0;}
     EdgeIndex edgeToIndex(Agedge_t * edge) {return edge ? model.makeEdgeIndex(edge) : EdgeIndex();}
 
     void emitAllDataChanged();
     void emitNodeChanged(const NodeIndex & node);
+
+    QString unusedName(Agraph_t * graph);
+    void initGraph();
 };
 
 DotGraphModel::Data::Data(DotGraphModel & m) :
     model(m),
     graph_p(0),
-    gvc(0)
+    gvc(0),
+    automaticNameCounter(0)
 {
 }
 
@@ -114,8 +106,10 @@ void DotGraphModel::Data::clearLayout()
 Agraph_t * DotGraphModel::Data::graph()
 {
     if (!graph_p) {
-        graph_p = agopen("", AGDIGRAPH);
-        registerGraph(graph_p);
+        aginit();
+        char dummy[] = ""; // the agopen API is not properly const-safe
+        graph_p = agopen(dummy, AGDIGRAPH);
+        initGraph();
     }
     return graph_p;
 }
@@ -124,74 +118,41 @@ void DotGraphModel::Data::setGraph(Agraph_t* agraph)
 {
     clear();
     graph_p = agraph;
-    registerGraph(agraph);
 }
 
-void DotGraphModel::Data::registerGraph(Agraph_t* g)
+void DotGraphModel::Data::initGraph()
 {
-    doRegisterAgraph(g);
-
-    for (Agnode_t * node = agfstnode(g); node; node = agnxtnode(g, node))
-        doRegisterAgnode(node);
+    // The graph library is not properly const-safe
+    char LABEL[] = "label";
+    char EMPTY[] = "";
+    agnodeattr(graph(), LABEL, EMPTY);
 }
 
-void DotGraphModel::Data::doRegisterAgraph(Agraph_t* g)
-{
-    Q_ASSERT(aggetrec(g, NODE, FALSE) == 0);
-    Node * node = agbindrec(g, NODE, sizeof(Node), FALSE);
-    node->firstChild = 0;
-    node->prev = 0;
-    node->next = 0;
-
-    Agraph_t * parent = agparent(g);
-    if (parent && parent != g) {
-        Node * parentRec = nodeRecord(parent);
-        if (parentRec->firstChild) {
-            node->next = parentRec->firstChild;
-            nodeRecord(node->next)->prev = g;
-        }
-        parentRec->firstChild = g;
-    }
-
-    for (Agraph_t * subg = agfstsubg(g); subg; subg = agnxtsubg(subg))
-        doRegisterAgraph(subg);
-}
-
-void DotGraphModel::Data::doRegisterAgnode(Agnode_t* node)
-{
-    Q_ASSERT(aggetrec(g, NODE, FALSE) == 0);
-    Node * nodeRec = agbindrec(node, NODE, sizeof(Node), FALSE);
-    nodeRec->firstChild = 0;
-    nodeRec->prev = 0;
-
-    Agraph_t * graph = agraphof(node);
-    Node * parentRec = nodeRecord(graph);
-    nodeRec->next = parentRec->firstChild;
-    if (nodeRec->next)
-        nodeRecord(nodeRec->next)->prev = node;
-    parentRec->firstChild = node;
-}
-
-void* DotGraphModel::Data::nodeAgobj(const NodeIndex & idx)
+void * DotGraphModel::Data::agobjFromIndex(const NodeIndex & idx)
 {
     return idx.isValid() ? model.nodeIndexInternalPtr(idx) : graph();
 }
 
-Node * DotGraphModel::Data::nodeRecord(void * agobj)
+Agnode_t * DotGraphModel::Data::node_cast(void * obj)
 {
-    Node * node = aggetrec(agobj, NODE, FALSE);
-    Q_ASSERT(node != 0);
-    return node;
+    Q_ASSERT(agobjkind(obj) == AGNODE);
+    return static_cast<Agnode_t *>(obj);
 }
 
-Node * DotGraphModel::Data::nodeRecord(const NodeIndex & idx)
+Agraph_t * DotGraphModel::Data::graph_cast(void * obj)
 {
-    return nodeRecord(nodeAgobj(idx));
+    Q_ASSERT(agobjkind(obj) == AGGRAPH);
+    return static_cast<Agraph_t *>(obj);
 }
 
-NodeIndex DotGraphModel::Data::nodeObjToIndex(void* agobj)
+NodeIndex DotGraphModel::Data::nodeToIndex(Agnode_t * node)
 {
-    return (agobj && agobj != graph_p) ? model.makeNodeIndex(agobj) : NodeIndex();
+    return node ? model.makeNodeIndex(node) : NodeIndex();
+}
+
+NodeIndex DotGraphModel::Data::nodeToIndex(Agraph_t * graph)
+{
+    return (graph && graph != graph_p) ? model.makeNodeIndex(graph) : NodeIndex();
 }
 
 void DotGraphModel::Data::emitAllDataChanged()
@@ -213,16 +174,24 @@ void DotGraphModel::Data::emitNodeChanged(const NodeIndex& node)
     }
 }
 
+QString DotGraphModel::Data::unusedName(Agraph_t* graph)
+{
+    QString name;
+    do {
+        name = QString("kgv%1").arg(++automaticNameCounter);
+    } while (agfindnode(graph, name.toUtf8().data()));
+    return name;
+}
 
 DotGraphModel::DotGraphModel(QObject* parent) :
     AbstractGraphModel(parent),
-    d(new Data)
+    d(new Data(*this))
 {
 }
 
 DotGraphModel::DotGraphModel(Agraph_t* agraph, QObject* parent) :
     AbstractGraphModel(parent),
-    d(new Data)
+    d(new Data(*this))
 {
     d->setGraph(agraph);
 }
@@ -252,26 +221,63 @@ Agraph_t * DotGraphModel::releaseGraph()
 
 NodeIndex DotGraphModel::firstNode(const NodeIndex & idx) const
 {
-    Node * node = d->nodeRecord(idx);
-    return d->nodeObjToIndex(node->firstChild);
+    void * agobj = d->agobjFromIndex(idx);
+    if (agobjkind(agobj) == AGNODE) {
+        return NodeIndex();
+    } else {
+        Agraph_t * subgraph = d->graph_cast(agobj);
+        Agnode_t * metanode = agmetanode(subgraph);
+        Agedge_t * edge = agfstout(metanode->graph, metanode);
+        if (edge)
+            return d->nodeToIndex(agusergraph(aghead(edge)));
+        else
+            return d->nodeToIndex(agfstnode(subgraph));
+    }
 }
 
 NodeIndex DotGraphModel::nextNode(const NodeIndex & idx) const
 {
-    Node * node = d->nodeRecord(idx);
-    return d->nodeObjToIndex(node->next);
+    if (!idx.isValid())
+        return NodeIndex();
+
+    void * agobj = d->agobjFromIndex(idx);
+    if (agobjkind(agobj) == AGNODE) {
+        Agnode_t * node = d->node_cast(agobj);
+        Agraph_t * subgraph = node->graph;
+        return d->nodeToIndex(agnxtnode(subgraph, node));
+    } else {
+        Agraph_t * subgraph = d->graph_cast(agobj);
+        Agnode_t * metanode = agmetanode(subgraph);
+        Agraph_t * metagraph = metanode->graph;
+        Agedge_t * edge_from_parent = agfstin(metagraph, metanode);
+        Q_ASSERT(edge_from_parent);
+        Q_ASSERT(agnxtin(metagraph, edge_from_parent) == 0 && "We do not support cycles in the meta-graph");
+        Agedge_t * edge_to_sibling = agnxtout(metagraph, edge_from_parent);
+        if (edge_to_sibling)
+            return d->nodeToIndex(agusergraph(aghead(edge_to_sibling)));
+
+        Agnode_t * parent_metanode = edge_from_parent->tail;
+        return d->nodeToIndex(agfstnode(agusergraph(parent_metanode)));
+    }
 }
 
 NodeIndex DotGraphModel::parent(const NodeIndex & idx) const
 {
-    void * agobj = d->nodeAgobj(idx);
-    int kind = agobjkind(agobj);
-    Q_ASSERT(kind == AGNODE || kind == AGGRAPH);
+    if (!idx.isValid())
+        return NodeIndex();
 
-    if (kind == AGNODE) {
-        return d->nodeObjToIndex(agraphof(agobj));
+    void * agobj = d->agobjFromIndex(idx);
+    if (agobjkind(agobj) == AGNODE) {
+        Agnode_t * node = d->node_cast(agobj);
+        return d->nodeToIndex(node->graph);
     } else {
-        return d->nodeObjToIndex(agparent(static_cast<Agraph_t *>(agobj)));
+        Agraph_t * subgraph = d->graph_cast(agobj);
+        Agnode_t * metanode = agmetanode(subgraph);
+        Agedge_t * edge_from_parent = agfstin(metanode->graph, metanode);
+        if (edge_from_parent)
+            return d->nodeToIndex(agusergraph(agtail(edge_from_parent)));
+        else
+            return NodeIndex();
     }
 }
 
@@ -292,7 +298,7 @@ EdgeIndex DotGraphModel::nextEdge(const EdgeIndex & idx) const
     if (!edge)
         return EdgeIndex();
 
-    Agedge_t * nextedge = agnxtin(graph, edge);
+    Agedge_t * nextedge = agnxtin(d->graph(), edge);
     if (nextedge)
         return d->edgeToIndex(nextedge);
 
@@ -303,16 +309,16 @@ EdgeIndex DotGraphModel::nextEdge(const EdgeIndex & idx) const
         if (first)
             return d->edgeToIndex(first);
     }
-    return EdgeIndex;
+    return EdgeIndex();
 }
 
 QList<EdgeIndex> DotGraphModel::incidentEdges(const NodeIndex & idx) const
 {
-    void * agobj = d->nodeAgobj(idx);
+    void * agobj = d->agobjFromIndex(idx);
     if (agobjkind(agobj) != AGNODE)
         return QList<EdgeIndex>();
 
-    Agnode_t * node = static_cast<Agnode_t *>(agobj);
+    Agnode_t * node = d->node_cast(agobj);
     Agraph_t * graph = d->graph();
     QList<EdgeIndex> edges;
     for (Agedge_t * edge = agfstedge(graph, node); edge; edge = agnxtedge(graph, edge, node)) {
@@ -323,11 +329,11 @@ QList<EdgeIndex> DotGraphModel::incidentEdges(const NodeIndex & idx) const
 
 QList<EdgeIndex> DotGraphModel::outgoingEdges(const NodeIndex & idx) const
 {
-    void * agobj = d->nodeAgobj(idx);
+    void * agobj = d->agobjFromIndex(idx);
     if (agobjkind(agobj) != AGNODE)
         return QList<EdgeIndex>();
 
-    Agnode_t * node = static_cast<Agnode_t *>(agobj);
+    Agnode_t * node = d->node_cast(agobj);
     Agraph_t * graph = d->graph();
     QList<EdgeIndex> edges;
     for (Agedge_t * edge = agfstout(graph, node); edge; edge = agnxtout(graph, edge)) {
@@ -338,11 +344,11 @@ QList<EdgeIndex> DotGraphModel::outgoingEdges(const NodeIndex & idx) const
 
 QList<EdgeIndex> DotGraphModel::incomingEdges(const NodeIndex & idx) const
 {
-    void * agobj = d->nodeAgobj(idx);
+    void * agobj = d->agobjFromIndex(idx);
     if (agobjkind(agobj) != AGNODE)
         return QList<EdgeIndex>();
 
-    Agnode_t * node = static_cast<Agnode_t *>(agobj);
+    Agnode_t * node = d->node_cast(agobj);
     Agraph_t * graph = d->graph();
     QList<EdgeIndex> edges;
     for (Agedge_t * edge = agfstin(graph, node); edge; edge = agnxtin(graph, edge)) {
@@ -354,19 +360,19 @@ QList<EdgeIndex> DotGraphModel::incomingEdges(const NodeIndex & idx) const
 NodeIndex DotGraphModel::head(const EdgeIndex & idx) const
 {
     Agedge_t * edge = d->edgeFromIndex(idx);
-    return d->nodeObjToIndex(edge ? aghead(edge) : 0);
+    return d->nodeToIndex(edge ? aghead(edge) : 0);
 }
 
 NodeIndex DotGraphModel::tail(const EdgeIndex & idx) const
 {
     Agedge_t * edge = d->edgeFromIndex(idx);
-    return d->nodeObjToIndex(edge ? agtail(edge) : 0);
+    return d->nodeToIndex(edge ? agtail(edge) : 0);
 }
 
-EdgeIndex DotGraphModel::addEdge(const NodeIndex & tailidx, const NodeIndex & headidx, const QString & name)
+EdgeIndex DotGraphModel::addEdge(const NodeIndex & tailidx, const NodeIndex & headidx)
 {
-    void * tailobj = d->nodeAgobj(tailidx);
-    void * headobj = d->nodeAgobj(headidx);
+    void * tailobj = d->agobjFromIndex(tailidx);
+    void * headobj = d->agobjFromIndex(headidx);
 
     if (agobjkind(tailobj) != AGNODE || agobjkind(headobj) != AGNODE) {
         Q_ASSERT(false && "Calling DotGraphModel::addEdge on subgraphs");
@@ -375,18 +381,10 @@ EdgeIndex DotGraphModel::addEdge(const NodeIndex & tailidx, const NodeIndex & he
     }
 
     Agraph_t * g = d->graph();
-    Agnode_t * tail = static_cast<Agnode_t *>(tailobj);
-    Agnode_t * head = static_cast<Agnode_t *>(headobj);
+    Agnode_t * tail = d->node_cast(tailobj);
+    Agnode_t * head = d->node_cast(headobj);
 
-    QByteArray nameBytes = name.toUtf8();
-    const char * name = name.isEmpty() ? 0 : nameBytes.data();
-    if (name && agedge(g, tail, head, name, FALSE) != NULL) {
-        Q_ASSERT(false && "DotGraphModel::addEdge: name already exists");
-        kWarning() << "DotGraphModel::addEdge: name already exists";
-        return EdgeIndex();
-    }
-
-    Agedge_t * edge = agedge(g, tail, head, name, TRUE);
+    Agedge_t * edge = agedge(g, tail, head);
     EdgeIndex idx = d->edgeToIndex(edge);
     emit edgeInserted(idx);
     return idx;
@@ -399,12 +397,12 @@ void DotGraphModel::removeEdge(const EdgeIndex & idx)
         return;
 
     emit edgeAboutToBeRemoved(idx);
-    agdeledge(d->graph(), edge);
+    agdelete(d->graph(), edge);
 }
 
 NodeIndex DotGraphModel::addNode(const NodeIndex & parentidx, const QString & name)
 {
-    void * parentobj = d->nodeAgobj(parentidx);
+    void * parentobj = d->agobjFromIndex(parentidx);
 
     if (agobjkind(parentobj) != AGGRAPH) {
         Q_ASSERT(false && "DotGraphModel::addNode: parent is a node");
@@ -412,26 +410,28 @@ NodeIndex DotGraphModel::addNode(const NodeIndex & parentidx, const QString & na
         return NodeIndex();
     }
 
-    Agraph_t * parent = static_cast<Agraph_t *>(parentobj);
-
-    QByteArray nameBytes = name.toUtf8();
-    const char * name = name.isEmpty() ? 0 : nameBytes.data();
-    if (name && agnode(d->graph(), name, FALSE) != NULL) {
-        Q_ASSERT(false && "DotGraphModel::addNode: name already exists");
-        kWarning() << "DotGraphModel::addNode: name already exists";
-        return NodeIndex();
+    Agraph_t * parent = d->graph_cast(parentobj);
+    QString realname;
+    if (!name.isEmpty()) {
+        if (agfindnode(d->graph(), name.toUtf8().data()) != NULL) {
+            Q_ASSERT(false && "DotGraphModel::addNode: name already exists");
+            kWarning() << "DotGraphModel::addNode: name already exists";
+            return NodeIndex();
+        }
+        realname = name;
+    } else {
+        realname = d->unusedName(d->graph());
     }
 
-    Agnode_t * node = agnode(parent, name, TRUE);
-    d->doRegisterAgnode(node);
-    NodeIndex idx = d->nodeObjToIndex(node);
+    Agnode_t * node = agnode(parent, realname.toUtf8().data());
+    NodeIndex idx = d->nodeToIndex(node);
     emit nodeInserted(idx);
     return idx;
 }
 
 NodeIndex DotGraphModel::addSubgraph(const NodeIndex & parentidx, const QString & name)
 {
-    void * parentobj = d->nodeAgobj(parentidx);
+    void * parentobj = d->agobjFromIndex(parentidx);
 
     if (agobjkind(parentobj) != AGGRAPH) {
         Q_ASSERT(false && "DotGraphModel::addSubgraph: parent is a node");
@@ -439,19 +439,21 @@ NodeIndex DotGraphModel::addSubgraph(const NodeIndex & parentidx, const QString 
         return NodeIndex();
     }
 
-    Agraph_t * parent = static_cast<Agraph_t *>(parentobj);
-
-    QByteArray nameBytes = name.toUtf8();
-    const char * name = name.isEmpty() ? 0 : nameBytes.data();
-    if (name && agsubg(d->graph(), name, FALSE) != NULL) {
-        Q_ASSERT(false && "DotGraphModel::addSubgraph: name already exists");
-        kWarning() << "DotGraphModel::addSubgraph: name already exists";
-        return NodeIndex();
+    Agraph_t * parent = d->graph_cast(parentobj);
+    QString realname;
+    if (!name.isEmpty()) {
+        if (agfindsubg(d->graph(), name.toUtf8().data()) != NULL) {
+            Q_ASSERT(false && "DotGraphModel::addSubgraph: name already exists");
+            kWarning() << "DotGraphModel::addSubgraph: name already exists";
+            return NodeIndex();
+        }
+        realname = name;
+    } else {
+        realname = d->unusedName(agmetanode(d->graph())->graph);
     }
 
-    Agraph_t * g = agsubg(parent, name, TRUE);
-    d->doRegisterAgraph(g);
-    NodeIndex idx = d->nodeObjToIndex(g);
+    Agraph_t * g = agsubg(parent, realname.toUtf8().data());
+    NodeIndex idx = d->nodeToIndex(g);
     emit nodeInserted(idx);
     return idx;
 }
@@ -461,7 +463,10 @@ void DotGraphModel::removeNode(const NodeIndex & node)
     if (!node.isValid())
         return;
 
-    while (NodeIndex firstChild = firstNode(node)) {
+    for (;;) {
+        NodeIndex firstChild = firstNode(node);
+        if (!firstChild.isValid())
+            break;
         removeNode(firstChild);
     }
     Q_FOREACH(const EdgeIndex & edge, incidentEdges(node)) {
@@ -469,30 +474,15 @@ void DotGraphModel::removeNode(const NodeIndex & node)
     }
 
     emit nodeAboutToBeRemoved(node);
-
-    void * nodeObj = d->nodeAgobj(node);
-    Node * nodeRec = d->nodeRecord(nodeObj);
-    Q_ASSERT(!nodeRec->firstChild);
-
-    if (nodeRec->next)
-        d->nodeRecord(nodeRec->next)->prev = nodeRec->prev;
-    if (nodeRec->prev) {
-        d->nodeRecord(nodeRec->prev)->next = nodeRec->next;
-    } else {
-        Node * parentRec = d->nodeRecord(parent(node));
-        Q_ASSERT(parentRec && parentRec != nodeRec);
-        Q_ASSERT(parentRec->firstChild == nodeObj);
-        parentRec->firstChild = nodeRec->next;
-    }
-    agdelete(d->graph(), nodeObj);
+    agdelete(d->graph(), d->agobjFromIndex(node));
 }
 
-QString DotGraphModel::nodeKey(const NodeIndex& node, const QString& key)
+QString DotGraphModel::nodeKey(const NodeIndex& node, const QString& key) const
 {
     if (!node.isValid())
         return QString();
 
-    void * agobj = d->nodeObjToIndex(node);
+    void * agobj = d->agobjFromIndex(node);
     const char * result = agget(agobj, key.toUtf8().data());
     if (result)
         return QString(result);
@@ -500,7 +490,7 @@ QString DotGraphModel::nodeKey(const NodeIndex& node, const QString& key)
         return QString();
 }
 
-QString DotGraphModel::edgeKey(const EdgeIndex& idx, const QString& key)
+QString DotGraphModel::edgeKey(const EdgeIndex& idx, const QString& key) const
 {
     if (!idx.isValid())
         return QString();
@@ -518,17 +508,34 @@ QVariant DotGraphModel::nodeData(const NodeIndex & node, int role) const
     if (!node.isValid())
         return QVariant();
 
-    //TODO: consider speeding this up via agxget
-    void * agobj = d->nodeAgobj(node);
+    void * agobj = d->agobjFromIndex(node);
+
+    if (agobjkind(agobj) == AGNODE) {
+        Agnode_t * node = d->node_cast(agobj);
+        switch (role) {
+        case BoundingBoxRole: {
+            const boxf & bb = ND_bb(node);
+            return QRectF(bb.LL.x, bb.LL.y, (bb.UR.x - bb.LL.x), (bb.UR.y - bb.LL.y));
+        }
+        default:
+            // fall-through
+            break;
+        }
+    } else {
+        Agraph_t * subgraph = d->graph_cast(agobj);
+        switch (role) {
+        case BoundingBoxRole: {
+            const boxf & bb = GD_bb(subgraph);
+            return QRectF(bb.LL.x, bb.LL.y, (bb.UR.x - bb.LL.x), (bb.UR.y - bb.LL.y));
+        }
+        default:
+            // fall-through
+            break;
+        }
+    }
+
     switch (role) {
     case Qt::DisplayRole: return nodeKey(node, "label");
-    case BoundingBoxRole: {
-        float w = ND_width(agobj);
-        float h = ND_height(agobj);
-        float cx = ND_coord(agobj).c;
-        float cy = ND_coord(agobj).c;
-        return QRectF(cx - w/2, cy - h/2, w, h);
-    }
     default:
         kWarning() << "DotGraphModel::nodeData: role " << role << " is not supported.";
         return QVariant();
@@ -540,8 +547,7 @@ QVariant DotGraphModel::edgeData(const EdgeIndex & idx, int role) const
     if (!idx.isValid())
         return QVariant();
 
-    //TODO: consider speeding this up via agxget
-    Agedge_t * edge = d->edgeFromIndex(idx);
+    //Agedge_t * edge = d->edgeFromIndex(idx);
     switch (role) {
     case Qt::DisplayRole: return edgeKey(idx, "label");;
     default:
@@ -555,7 +561,7 @@ void DotGraphModel::setNodeKey(const NodeIndex & idx, const QString & key, const
     if (!idx.isValid())
         return;
 
-    void * node = d->nodeAgobj(idx);
+    void * node = d->agobjFromIndex(idx);
     if (agset(node, key.toUtf8().data(), value.toUtf8().data()) < 0) {
         kWarning() << "DotGraphModel::setNodeKey: failed to set key " << key;
     } else {
@@ -611,7 +617,7 @@ void DotGraphModel::layout(const QString & layoutcommand)
     d->gvc = gvContext();
     gvLayout(d->gvc, d->graph(), layoutcommand.toUtf8().data());
 
-    // Emit loads of data change signals rather than modelReset,
+    // Emit data change signals rather than modelReset,
     // because we want to indicate to listeners that node and edge index
     // remain unchaged. This should allow listeners to implement fancy animations
     // to reflect position changes and other nice things.

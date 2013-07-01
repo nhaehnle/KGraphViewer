@@ -29,6 +29,9 @@ namespace KGraphViewer {
 /**
  * A graph model whose backing store is a Cgraph Agraph_t
  * and (optionally) a Graphviz layout.
+ *
+ * \warning This class calls the library function aginit() and sets various default
+ * attributes on the graph even when the graph is supplied by the library user.
  */
 class KGRAPHVIEWER_EXPORT DotGraphModel : public AbstractGraphModel {
 public:
@@ -124,12 +127,12 @@ public:
      * \param name the identifier string of the edge; if no string is given, a NULL identifier will be used.
      * Using the same identifier for multiple edges is undefined behavior.
      */
-    EdgeIndex addEdge(const NodeIndex & tail, const NodeIndex & head, const QString & name = QString());
+    EdgeIndex addEdge(const NodeIndex & tailidx, const NodeIndex & headidx);
 
     void removeEdge(const EdgeIndex & edge);
 
-    QString nodeKey(const NodeIndex & node, const QString & key);
-    QString edgeKey(const EdgeIndex & edge, const QString & key);
+    QString nodeKey(const KGraphViewer::NodeIndex& node, const QString& key) const;
+    QString edgeKey(const KGraphViewer::EdgeIndex& idx, const QString& key) const;
     void setNodeKey(const NodeIndex & node, const QString & key, const QString & value);
     void setEdgeKey(const EdgeIndex & edge, const QString & key, const QString & value);
     void setNodeData(const NodeIndex & node, int role, const QVariant & data);
