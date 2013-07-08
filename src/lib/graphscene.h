@@ -28,6 +28,7 @@ namespace KGraphViewer {
 
 class AbstractGraphModel;
 class NodeIndex;
+class EdgeIndex;
 
 class KGRAPHVIEWER_EXPORT AbstractItemDelegate : public QObject {
 public:
@@ -35,6 +36,7 @@ public:
     virtual ~AbstractItemDelegate();
 
     virtual QGraphicsItem * createNodeItem(const NodeIndex & node) = 0;
+    virtual QGraphicsItem * createEdgeItem(const EdgeIndex & edge) = 0;
 };
 
 /**

@@ -43,7 +43,8 @@ class DefaultItemDelegate : public AbstractItemDelegate {
 public:
     explicit DefaultItemDelegate(QObject * parent = 0) : AbstractItemDelegate(parent) {}
 
-    virtual QGraphicsItem * createNodeItem(const NodeIndex& node);
+    virtual QGraphicsItem* createNodeItem(const NodeIndex& node);
+    virtual QGraphicsItem* createEdgeItem(const EdgeIndex& edge);
 };
 
 QGraphicsItem * DefaultItemDelegate::createNodeItem(const NodeIndex & node)
@@ -61,6 +62,15 @@ QGraphicsItem * DefaultItemDelegate::createNodeItem(const NodeIndex & node)
     return rect;
 }
 
+QGraphicsItem* DefaultItemDelegate::createEdgeItem(const EdgeIndex& edge)
+{
+    QLineF line;
+    line.setP1(edge.data(TailPosRole).toPointF());
+    line.setP2(edge.data(HeadPosRole).toPointF());
+    QGraphicsLineItem * item = new QGraphicsLineItem(line);
+    return item;
+}
+
 } // anonymous namespace
 
 class GraphScene::Data : public QObject {
@@ -69,6 +79,7 @@ public:
     AbstractItemDelegate * customDelegate;
     AbstractItemDelegate * defaultDelegate;
     QHash<NodeIndex, QGraphicsItem *> nodeItems;
+    QHash<EdgeIndex, QGraphicsItem *> edgeItems;
 
     Data(GraphScene * scene) :
         QObject(scene),
@@ -123,7 +134,11 @@ void GraphScene::Data::setModel(AbstractGraphModel * newModel)
 
 void GraphScene::Data::clearItems()
 {
-    foreach (QGraphicsItem * item, nodeItems.values())
+    Q_FOREACH (QGraphicsItem * item, edgeItems.values())
+        delete item;
+    edgeItems.clear();
+
+    Q_FOREACH (QGraphicsItem * item, nodeItems.values())
         delete item;
     nodeItems.clear();
 }
@@ -131,6 +146,15 @@ void GraphScene::Data::clearItems()
 void GraphScene::Data::buildItems()
 {
     buildChildren(NodeIndex());
+
+    AbstractItemDelegate * d = delegate();
+    GraphScene * s = scene();
+
+    for (EdgeIndex edgeidx = model->firstEdge(); edgeidx.isValid(); edgeidx = model->nextEdge(edgeidx)) {
+        QGraphicsItem * item = d->createEdgeItem(edgeidx);
+        s->addItem(item);
+        edgeItems.insert(edgeidx, item);
+    }
 }
 
 void GraphScene::Data::buildChildren(const NodeIndex & parent)

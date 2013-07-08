@@ -28,8 +28,16 @@
 namespace KGraphViewer {
 
 enum DataRole {
+    /** Bounding box of a node in global coordinates.
+     */
     BoundingBoxRole = Qt::UserRole,
+
+    /** Global position of the head of an edge.
+     */
     HeadPosRole = Qt::UserRole + 1,
+
+    /** Global position of the tail of an edge.
+     */
     TailPosRole = Qt::UserRole + 2,
 
     UserRole = Qt::UserRole + 16

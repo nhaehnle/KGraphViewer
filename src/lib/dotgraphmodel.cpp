@@ -547,9 +547,35 @@ QVariant DotGraphModel::edgeData(const EdgeIndex & idx, int role) const
     if (!idx.isValid())
         return QVariant();
 
-    //Agedge_t * edge = d->edgeFromIndex(idx);
+    Agedge_t * edge = d->edgeFromIndex(idx);
     switch (role) {
-    case Qt::DisplayRole: return edgeKey(idx, "label");;
+    case Qt::DisplayRole: return edgeKey(idx, "label");
+    case HeadPosRole: {
+        const splines * spl = ED_spl(edge);
+        if (spl) {
+            const bezier & b = spl->list[spl->size - 1];
+            const pointf & p = b.list[b.size - 1];
+            return QPointF(p.x, p.y);
+        } else {
+            const boxf & bb = ND_bb(aghead(edge));
+            float px = ED_head_port(edge).p.x;
+            float py = ED_head_port(edge).p.y;
+            return QPointF((bb.LL.x + bb.UR.x) * 0.5 + px, (bb.LL.y + bb.UR.y) * 0.5 + py);
+        }
+    }
+    case TailPosRole: {
+        const splines * spl = ED_spl(edge);
+        if (spl) {
+            const bezier & b = spl->list[0];
+            const pointf & p = b.list[0];
+            return QPointF(p.x, p.y);
+        } else {
+            const boxf & bb = ND_bb(agtail(edge));
+            float px = ED_tail_port(edge).p.x;
+            float py = ED_tail_port(edge).p.y;
+            return QPointF((bb.LL.x + bb.UR.x) * 0.5 + px, (bb.LL.y + bb.UR.y) * 0.5 + py);
+        }
+    }
     default:
         kWarning() << "DotGraphModel::edgeData: role " << role << " is not supported.";
         return QVariant();
@@ -616,6 +642,7 @@ void DotGraphModel::layout(const QString & layoutcommand)
     d->clearLayout();
     d->gvc = gvContext();
     gvLayout(d->gvc, d->graph(), layoutcommand.toUtf8().data());
+    gvRender(d->gvc, d->graph(), "dot", NULL);
 
     // Emit data change signals rather than modelReset,
     // because we want to indicate to listeners that node and edge index
