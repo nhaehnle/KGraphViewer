@@ -33,3 +33,11 @@ configure_file (config-kgraphviewer.h.cmake ${CMAKE_CURRENT_BINARY_DIR}/config-k
 add_subdirectory(src)
 add_subdirectory(doc)
 
+# Setup config files for *other* projects to be able to find us
+export(TARGETS kgraphviewerlib FILE "${CMAKE_CURRENT_BINARY_DIR}/KGraphViewerTargets.cmake")
+export(PACKAGE KGraphViewer)
+
+configure_file(KGraphViewerConfig.cmake.in "${CMAKE_CURRENT_BINARY_DIR}/KGraphViewerConfig.cmake" @ONLY)
+
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/KGraphViewerConfig.cmake" DESTINATION "${LIB_INSTALL_DIR}/cmake/kgraphviewer")
+install(EXPORT KGraphViewerTargets DESTINATION "${LIB_INSTALL_DIR}/cmake/kgraphviewer" FILE KGraphViewerTargets.cmake)

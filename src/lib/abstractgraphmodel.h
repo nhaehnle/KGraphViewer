@@ -138,7 +138,7 @@ public:
      * Returns the first child of the given node,
      * or the first top-level node if \p node is invalid.
      */
-    virtual NodeIndex firstNode(const NodeIndex & node) const = 0;
+    virtual NodeIndex firstNode(const NodeIndex & node = NodeIndex()) const = 0;
 
     /**
      * Return the next child in the given node's direct parent.
@@ -175,13 +175,13 @@ public:
 Q_SIGNALS:
     void modelReset();
 
-    void nodeDataChanged(const NodeIndex & node);
-    void nodeAboutToBeRemoved(const NodeIndex & node);
-    void nodeInserted(const NodeIndex & node);
+    void nodeDataChanged(const KGraphViewer::NodeIndex & node);
+    void nodeAboutToBeRemoved(const KGraphViewer::NodeIndex & node);
+    void nodeInserted(const KGraphViewer::NodeIndex & node);
 
-    void edgeDataChanged(const EdgeIndex & edge);
-    void edgeAboutToBeRemoved(const EdgeIndex & edge);
-    void edgeInserted(const EdgeIndex & edge);
+    void edgeDataChanged(const KGraphViewer::EdgeIndex & edge);
+    void edgeAboutToBeRemoved(const KGraphViewer::EdgeIndex & edge);
+    void edgeInserted(const KGraphViewer::EdgeIndex & edge);
 
 protected:
     void * nodeIndexInternalPtr(const NodeIndex & node) const {Q_ASSERT(node.m == this); return node.p;}

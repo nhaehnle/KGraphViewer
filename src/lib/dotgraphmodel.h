@@ -79,7 +79,7 @@ public:
     virtual QVariant nodeData(const NodeIndex & node, int role) const;
     virtual QVariant edgeData(const EdgeIndex & edge, int role) const;
 
-    virtual NodeIndex firstNode(const NodeIndex & node) const;
+    virtual NodeIndex firstNode(const NodeIndex & node = NodeIndex()) const;
     virtual NodeIndex nextNode(const NodeIndex & node) const;
     virtual NodeIndex parent(const NodeIndex & node) const;
 

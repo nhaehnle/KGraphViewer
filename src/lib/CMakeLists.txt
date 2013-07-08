@@ -53,8 +53,13 @@ target_link_libraries(kgraphviewerlib ${QT_QTSVG_LIBRARY} ${KDE4_KIO_LIBS} ${KDE
 
 set_target_properties(kgraphviewerlib PROPERTIES VERSION 2.1 SOVERSION 2 OUTPUT_NAME kgraphviewer)
 
-install(TARGETS kgraphviewerlib ${INSTALL_TARGETS_DEFAULT_ARGS})
+install(TARGETS kgraphviewerlib EXPORT KGraphViewerTargets ${INSTALL_TARGETS_DEFAULT_ARGS})
 install(FILES dotgraphview.h DESTINATION ${INCLUDE_INSTALL_DIR}/kgraphviewer/ COMPONENT Devel)
+install(FILES abstractgraphmodel.h DESTINATION ${INCLUDE_INSTALL_DIR}/kgraphviewer/ COMPONENT Devel)
+install(FILES graphmodel.h DESTINATION ${INCLUDE_INSTALL_DIR}/kgraphviewer/ COMPONENT Devel)
+install(FILES dotgraphmodel.h DESTINATION ${INCLUDE_INSTALL_DIR}/kgraphviewer/ COMPONENT Devel)
+install(FILES dotgraphdelegate.h DESTINATION ${INCLUDE_INSTALL_DIR}/kgraphviewer/ COMPONENT Devel)
+install(FILES graphscene.h DESTINATION ${INCLUDE_INSTALL_DIR}/kgraphviewer/ COMPONENT Devel)
 install(FILES kgraphviewer_export.h DESTINATION ${INCLUDE_INSTALL_DIR}/kgraphviewer/ COMPONENT Devel)
 
 install( FILES kgraphviewer_partsettings.kcfg DESTINATION ${KCFG_INSTALL_DIR} )

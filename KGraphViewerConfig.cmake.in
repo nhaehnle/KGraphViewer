@@ -1,0 +1,16 @@
+# Config file for the KGraphViewer package
+#
+# Defines the following variables:
+#  KGRAPHVIEWER_INCLUDE_DIRS  - include directories
+#  KGRAPHVIEWER_LIBRARIES     - libraries to link against
+
+# Compute paths
+get_filename_component(KGRAPHVIEWER_CMAKE_DIR "${CMAKE_CURRENT_LIST_FILE}" PATH)
+
+# Our library dependencies (contains definitions for IMPORTED targets)
+if(NOT TARGET kgraphviewerlib)
+  include("${KGRAPHVIEWER_CMAKE_DIR}/KGraphViewerTargets.cmake")
+endif()
+
+set(KGRAPHVIEWER_INCLUDE_DIRS "@INCLUDE_INSTALL_DIR@")
+set(KGRAPHVIEWER_LIBRARIES kgraphviewerlib)

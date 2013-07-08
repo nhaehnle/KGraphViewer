@@ -23,6 +23,8 @@
 #include "abstractgraphmodel.h"
 
 #include <QGraphicsItem>
+#include <QSet>
+#include <QTimer>
 
 namespace KGraphViewer {
 
@@ -74,20 +76,19 @@ QGraphicsItem* DefaultItemDelegate::createEdgeItem(const EdgeIndex& edge)
 } // anonymous namespace
 
 class GraphScene::Data : public QObject {
+    Q_OBJECT
+
 public:
     AbstractGraphModel * model;
     AbstractItemDelegate * customDelegate;
     AbstractItemDelegate * defaultDelegate;
     QHash<NodeIndex, QGraphicsItem *> nodeItems;
     QHash<EdgeIndex, QGraphicsItem *> edgeItems;
+    QSet<NodeIndex> updateNodes;
+    QSet<EdgeIndex> updateEdges;
+    QTimer updateTimer;
 
-    Data(GraphScene * scene) :
-        QObject(scene),
-        model(0),
-        customDelegate(0),
-        defaultDelegate(0)
-    {
-    }
+    Data(GraphScene * scene);
 
     GraphScene * scene() const {return static_cast<GraphScene *>(parent());}
     AbstractItemDelegate * delegate();
@@ -98,7 +99,27 @@ public:
     void clearItems();
     void buildItems();
     void buildChildren(const NodeIndex & parent);
+
+public Q_SLOTS:
+    void modelReset();
+    void nodeDataChanged(KGraphViewer::NodeIndex node);
+    void nodeInserted(KGraphViewer::NodeIndex node);
+    void nodeAboutToBeRemoved(const KGraphViewer::NodeIndex& node);
+    void edgeDataChanged(KGraphViewer::EdgeIndex edge);
+    void edgeInserted(KGraphViewer::EdgeIndex edge);
+    void edgeAboutToBeRemoved(KGraphViewer::EdgeIndex node);
+    void delayedUpdates();
 };
+
+GraphScene::Data::Data(GraphScene * scene) :
+    QObject(scene),
+    model(0),
+    customDelegate(0),
+    defaultDelegate(0)
+{
+    updateTimer.setSingleShot(true);
+    connect(&updateTimer, SIGNAL(timeout()), SLOT(delayedUpdates()));
+}
 
 AbstractItemDelegate * GraphScene::Data::delegate()
 {
@@ -123,13 +144,26 @@ void GraphScene::Data::setCustomDelegate(AbstractItemDelegate * delegate)
 
 void GraphScene::Data::setModel(AbstractGraphModel * newModel)
 {
-    if (model)
+    if (newModel == model)
+        return;
+
+    if (model) {
         clearItems();
+        disconnect(model, 0, this, 0);
+    }
 
     model = newModel;
 
-    if (model)
+    if (model) {
         buildItems();
+        connect(model, SIGNAL(modelReset()), SLOT(modelReset()));
+        connect(model, SIGNAL(nodeInserted(KGraphViewer::NodeIndex)), SLOT(nodeInserted(KGraphViewer::NodeIndex)));
+        connect(model, SIGNAL(nodeAboutToBeRemoved(KGraphViewer::NodeIndex)), SLOT(nodeAboutToBeRemoved(KGraphViewer::NodeIndex)));
+        connect(model, SIGNAL(nodeDataChanged(KGraphViewer::NodeIndex)), SLOT(nodeDataChanged(KGraphViewer::NodeIndex)));
+        connect(model, SIGNAL(edgeInserted(KGraphViewer::EdgeIndex)), SLOT(edgeInserted(KGraphViewer::EdgeIndex)));
+        connect(model, SIGNAL(edgeAboutToBeRemoved(KGraphViewer::EdgeIndex)), SLOT(edgeAboutToBeRemoved(KGraphViewer::EdgeIndex)));
+        connect(model, SIGNAL(edgeDataChanged(KGraphViewer::EdgeIndex)), SLOT(edgeDataChanged(KGraphViewer::EdgeIndex)));
+    }
 }
 
 void GraphScene::Data::clearItems()
@@ -141,6 +175,9 @@ void GraphScene::Data::clearItems()
     Q_FOREACH (QGraphicsItem * item, nodeItems.values())
         delete item;
     nodeItems.clear();
+
+    updateNodes.clear();
+    updateEdges.clear();
 }
 
 void GraphScene::Data::buildItems()
@@ -168,6 +205,78 @@ void GraphScene::Data::buildChildren(const NodeIndex & parent)
         nodeItems.insert(nodeidx, item);
         buildChildren(nodeidx);
     }
+}
+
+void GraphScene::Data::modelReset()
+{
+    clearItems();
+    buildItems();
+}
+
+void GraphScene::Data::nodeAboutToBeRemoved(const NodeIndex& node)
+{
+    if (nodeItems.contains(node)) {
+        delete nodeItems[node];
+        nodeItems.remove(node);
+    }
+    updateNodes.remove(node);
+}
+
+void GraphScene::Data::nodeInserted(NodeIndex node)
+{
+    updateNodes.insert(node);
+    updateTimer.start();
+}
+
+void GraphScene::Data::nodeDataChanged(NodeIndex node)
+{
+    updateNodes.insert(node);
+    updateTimer.start();
+}
+
+void GraphScene::Data::edgeAboutToBeRemoved(EdgeIndex edge)
+{
+    if (edgeItems.contains(edge)) {
+        delete edgeItems[edge];
+        edgeItems.remove(edge);
+    }
+    updateEdges.remove(edge);
+}
+
+void GraphScene::Data::edgeInserted(EdgeIndex edge)
+{
+    updateEdges.insert(edge);
+    updateTimer.start();
+}
+
+void GraphScene::Data::edgeDataChanged(EdgeIndex edge)
+{
+    updateEdges.insert(edge);
+    updateTimer.start();
+}
+
+void GraphScene::Data::delayedUpdates()
+{
+    AbstractItemDelegate * d = delegate();
+    GraphScene * s = scene();
+
+    Q_FOREACH (const NodeIndex & node, updateNodes) {
+        if (nodeItems.contains(node))
+            delete nodeItems[node];
+        QGraphicsItem * item = d->createNodeItem(node);
+        s->addItem(item);
+        nodeItems[node] = item;
+    }
+    updateNodes.clear();
+
+    Q_FOREACH (const EdgeIndex & edge, updateEdges) {
+        if (edgeItems.contains(edge))
+            delete edgeItems[edge];
+        QGraphicsItem * item = d->createEdgeItem(edge);
+        s->addItem(item);
+        edgeItems[edge] = item;
+    }
+    updateEdges.clear();
 }
 
 
@@ -214,5 +323,7 @@ AbstractItemDelegate * GraphScene::itemDelegate() const
 }
 
 } // namespace KGraphViewer
+
+#include "graphscene.moc"
 
 // kate: space-indent on;indent-width 4;replace-tabs on;remove-trailing-space true
