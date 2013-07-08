@@ -5,6 +5,7 @@ Simple example using the DotGraphModel and GraphScene classes
 */
 
 #include "dotgraphmodel.h"
+#include "dotgraphdelegate.h"
 #include "graphscene.h"
 
 #include <KAboutData>
@@ -35,9 +36,11 @@ MainWindow::MainWindow()
     makeGraph();
 
     m_scene = new KGraphViewer::GraphScene(this);
+    m_scene->setItemDelegate(new KGraphViewer::DotGraphDelegate(this));
     m_scene->setModel(m_model);
 
     m_view = new QGraphicsView(this);
+    m_view->setRenderHint(QPainter::Antialiasing);
     m_view->setScene(m_scene);
 
     setCentralWidget(m_view);
@@ -48,11 +51,14 @@ void MainWindow::makeGraph()
 {
     m_model = new KGraphViewer::DotGraphModel(this);
     NodeIndex nodeA = m_model->addNode(NodeIndex());
-    NodeIndex nodeB = m_model->addNode(NodeIndex());
-    EdgeIndex edgeAB = m_model->addEdge(nodeA, nodeB);
-
     m_model->setNodeData(nodeA, Qt::DisplayRole, "Node A");
-    m_model->setNodeData(nodeB, Qt::DisplayRole, "Node B");
+
+    for (int i = 0; i < 8; ++i) {
+        NodeIndex nodeB = m_model->addNode(NodeIndex());
+        m_model->setNodeData(nodeB, Qt::DisplayRole, QString("Node B%1").arg(i + 1));
+        m_model->addEdge(nodeA, nodeB);
+    }
+
     m_model->layout("dot");
 }
 

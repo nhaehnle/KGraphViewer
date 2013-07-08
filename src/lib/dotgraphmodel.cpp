@@ -642,7 +642,7 @@ void DotGraphModel::layout(const QString & layoutcommand)
     d->clearLayout();
     d->gvc = gvContext();
     gvLayout(d->gvc, d->graph(), layoutcommand.toUtf8().data());
-    gvRender(d->gvc, d->graph(), "dot", NULL);
+    gvRender(d->gvc, d->graph(), "xdot", NULL);
 
     // Emit data change signals rather than modelReset,
     // because we want to indicate to listeners that node and edge index

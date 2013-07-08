@@ -131,8 +131,8 @@ public:
 
     void removeEdge(const EdgeIndex & edge);
 
-    QString nodeKey(const KGraphViewer::NodeIndex& node, const QString& key) const;
-    QString edgeKey(const KGraphViewer::EdgeIndex& idx, const QString& key) const;
+    QString nodeKey(const NodeIndex& node, const QString& key) const;
+    QString edgeKey(const EdgeIndex& idx, const QString& key) const;
     void setNodeKey(const NodeIndex & node, const QString & key, const QString & value);
     void setEdgeKey(const EdgeIndex & edge, const QString & key, const QString & value);
     void setNodeData(const NodeIndex & node, int role, const QVariant & data);

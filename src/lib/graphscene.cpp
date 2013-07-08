@@ -195,7 +195,7 @@ void GraphScene::setModel(AbstractGraphModel * model)
 }
 
 /**
- * Install a custom item delegate responsible.
+ * Install a custom item delegate.
  *
  * Any existing delegate will be removed but not deleted. GraphScene does not take ownership
  * of the given delegate.

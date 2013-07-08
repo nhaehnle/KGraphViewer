@@ -6,6 +6,7 @@ set( kgraphviewerlib_LIB_SRCS
    graphmodel.cpp
    graphscene.cpp
    dotgraphmodel.cpp
+   dotgraphdelegate.cpp
    loadandlayoutjob.cpp
    graphelement.cpp
    graphsubgraph.cpp
