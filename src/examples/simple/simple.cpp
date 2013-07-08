@@ -56,6 +56,9 @@ void MainWindow::makeGraph()
 
     m_model->setNodeData(nodeB, KGraphViewer::BoundingBoxRole, QRectF(80, 70, 180, 50));
     m_model->setNodeData(nodeB, Qt::DisplayRole, "Node B");
+
+    m_model->setEdgeData(edgeAB, KGraphViewer::TailPosRole, QPointF(70, 50));
+    m_model->setEdgeData(edgeAB, KGraphViewer::HeadPosRole, QPointF(170, 70));
 }
 
 
